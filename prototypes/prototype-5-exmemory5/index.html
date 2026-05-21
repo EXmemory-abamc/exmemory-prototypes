@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXmemory — EXpanded MEMORY</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0c0c0a;--fg:#e8e8e2;--red:#C0392B;--border:rgba(232,232,226,.1)}
+html.light{--bg:#f8f8f5;--fg:#1a1a16;--border:rgba(26,26,22,.12)}
+body{background:var(--bg);color:var(--fg);font-family:'DM Sans',sans-serif;height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:background .5s,color .5s}
+#logo{position:relative;margin-bottom:12px}
+#logo svg{display:block;width:auto;height:52px}
+#tagline{font-size:9px;font-weight:400;letter-spacing:.35em;text-transform:uppercase;color:var(--red);margin-bottom:0;opacity:.7}
+#sub{font-size:10px;font-weight:300;letter-spacing:.12em;color:var(--border);margin-bottom:48px;margin-top:8px}
+.btn{background:none;border:1px solid var(--fg);color:var(--fg);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;padding:14px 40px;cursor:pointer;transition:all .4s;text-decoration:none}
+.btn:hover{background:var(--fg);color:var(--bg)}
+#theme-btn{position:fixed;top:28px;right:36px;background:none;border:1px solid var(--border);color:var(--fg);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;padding:8px 16px;cursor:pointer;transition:all .2s;z-index:10}
+#theme-btn:hover{background:var(--fg);color:var(--bg)}
+.fade-in{animation:fadeIn 1.2s ease both}
+.fade-in-d2{animation:fadeIn 1.2s ease .3s both}
+.fade-in-d4{animation:fadeIn 1.2s ease .6s both}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+#fade-in{position:fixed;inset:0;z-index:9999;background:var(--bg);animation:fadeOut .8s ease-out forwards;pointer-events:none}
+@keyframes fadeOut{0%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+<div id="fade-in"></div>
+<button id="theme-btn" onclick="toggleTheme()">◐ Tema</button>
+
+<div id="logo" class="fade-in">
+  <svg viewBox="0 0 200 32" fill="none">
+    <text x="0" y="26" font-family="'DM Sans',sans-serif" font-size="24" font-weight="600" letter-spacing="6" fill="currentColor">EXmemory</text>
+  </svg>
+</div>
+<div id="tagline" class="fade-in-d2">EXpanded MEMORY</div>
+<div id="sub" class="fade-in-d2">Terremoto Italia Centrale · 2016</div>
+<a href="globe.html" class="btn fade-in-d4">Entra</a>
+
+<script>
+const dm = localStorage.getItem('exm_theme');
+if(dm === '0') document.documentElement.classList.add('light');
+function toggleTheme(){
+  const d = document.documentElement.classList.toggle('light');
+  localStorage.setItem('exm_theme', d ? '0' : '1');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Globe — EXmemory v4.0</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f8f8f5;--fg:#1a1a16;--mid:#8a8a82;--red:#C0392B;--border:rgba(26,26,22,.12)}
+html.dark{--bg:#0c0c0a;--fg:#e8e8e2;--mid:#5a5a54;--red:#C0392B;--border:rgba(232,232,226,.1)}
+body{background:var(--bg);color:var(--fg);font-family:'DM Sans',sans-serif;overflow:hidden;transition:background .5s,color .5s}
+#canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+nav{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:28px 36px;z-index:20;pointer-events:none}
+nav a{font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);text-decoration:none;pointer-events:all;transition:color .2s}
+nav a:hover{color:var(--red)}
+nav div{display:flex;align-items:center;gap:12px}
+#theme-btn{background:none;border:1px solid var(--border);color:var(--fg);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;padding:8px 16px;cursor:pointer;pointer-events:all;transition:all .2s}
+#theme-btn:hover{background:var(--fg);color:var(--bg)}
+#hint{position:fixed;bottom:36px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;color:var(--mid);opacity:.7;z-index:20;pointer-events:none;text-align:center;white-space:nowrap}
+#cursor-dot{position:fixed;width:10px;height:10px;border-radius:50%;border:2px solid var(--red);background:transparent;pointer-events:none;z-index:100;opacity:0;transform:translate(-50%,-50%);transition:opacity .2s,transform .15s}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<nav>
+  <a href="index.html">← Home</a>
+  <div>
+    <a href="country.html" id="next-link">Italia →</a>
+    <button id="theme-btn">◐ Tema</button>
+  </div>
+</nav>
+<div id="hint">Clicca il punto rosso · Trascina per ruotare · Scorri per zoomare</div>
+<div id="cursor-dot"></div>
+<div id="loading-bar" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;display:flex;flex-direction:column;align-items:center;gap:14px;pointer-events:none;display:none">
+  <div style="width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite"></div>
+  <div style="font-size:9px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--mid)">Caricamento globo</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script>
+const canvas=document.getElementById('canvas');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,logarithmicDepthBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.polygonOffset=true;renderer.polygonOffsetFactor=-1;renderer.polygonOffsetUnits=-1;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.001,1000);
+const raycaster=new THREE.Raycaster();
+const clock=new THREE.Clock();
+
+let darkMode=localStorage.getItem('exm_theme')==='dark';
+let isDragging=false,dragStart={x:0,y:0};
+let orbitPos=new THREE.Vector3(0,.2,2.8);
+let globeGroup=null,pulseMeshes=[];
+let hotspots=[];
+
+const GLOBE_ROT_Y=1.84;
+const ITALY_LOCAL=(()=>{
+  const u=(13.29+180)/360,vv=(90+42.63)/180;
+  const phi=u*Math.PI*2,theta=(1-vv)*Math.PI;
+  return new THREE.Vector3(-Math.sin(theta)*Math.cos(phi),Math.cos(theta),Math.sin(theta)*Math.sin(phi)).multiplyScalar(1.015);
+})();
+
+const C={
+  bg:()=>darkMode?0x0c0c0a:0xf8f8f5,
+};
+
+// Theme
+document.documentElement.classList.toggle('dark',darkMode);
+const th=document.getElementById('theme-btn');th.textContent=darkMode?'☀ Tema':'◐ Tema';
+th.addEventListener('click',()=>{
+  darkMode=!darkMode;
+  document.documentElement.classList.toggle('dark',darkMode);
+  th.textContent=darkMode?'☀ Tema':'◐ Tema';
+  localStorage.setItem('exm_theme',darkMode?'dark':'light');
+  scene.background=new THREE.Color(C.bg());
+  if(globeGroup)globeGroup.children.forEach(c=>{if(c.material&&c.material.opacity!==undefined&&c.material.transparent){c.material.opacity=darkMode?.1:.06;}});
+});
+
+// Lights
+function setupLights(){
+  scene.children.filter(c=>c.isLight).forEach(l=>scene.remove(l));
+  scene.add(new THREE.AmbientLight(0xffffff,darkMode?.35:.55));
+  const dir=new THREE.DirectionalLight(0xffffff,darkMode?1.4:.9);
+  dir.position.set(3,5,3);scene.add(dir);
+}
+
+// Safe texture loader with error fallback
+function loadTextureSafe(url, fallbackColor, onLoad){
+  const fc=document.createElement('canvas');fc.width=2;fc.height=2;
+  fc.getContext('2d').fillStyle=fallbackColor;fc.getContext('2d').fillRect(0,0,2,2);
+  const loader=new THREE.TextureLoader();
+  const tex=loader.load(url,onLoad,undefined,()=>{
+    tex.image=fc;tex.needsUpdate=true;if(onLoad)onLoad();
+  });
+  return tex;
+}
+
+// Build Earth
+function buildEarth(){
+  document.getElementById('loading-bar').style.display='flex';
+  scene.children.forEach(o=>{if(o.geometry)o.geometry.dispose();if(o.material){const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});
+  while(scene.children.length)scene.remove(scene.children[0]);
+  setups:setupLights();
+  scene.background=new THREE.Color(C.bg());
+
+  globeGroup=new THREE.Group();
+  globeGroup.rotation.y=GLOBE_ROT_Y;
+  scene.add(globeGroup);
+
+  const geo=new THREE.SphereGeometry(1,72,72);
+  let loadedTex=0, loadingDone=false;
+  const onTexLoad=()=>{loadedTex++;if(loadedTex>1&&!loadingDone){loadingDone=true;document.getElementById('loading-bar').style.display='none'}};
+  const tex=loadTextureSafe('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg','#224488',onTexLoad);
+  const bump=loadTextureSafe('https://unpkg.com/three-globe/example/img/earth-topology.png','#888888',onTexLoad);
+  setTimeout(()=>{if(!loadingDone){loadingDone=true;document.getElementById('loading-bar').style.display='none'}},15000);
+  const mat=new THREE.MeshStandardMaterial({map:tex,bumpMap:bump,bumpScale:.02,roughness:.7,metalness:0});
+  globeGroup.add(new THREE.Mesh(geo,mat));
+
+  const atmM=new THREE.MeshStandardMaterial({color:0x7799cc,transparent:true,opacity:darkMode?.1:.06,side:THREE.FrontSide,depthWrite:false});
+  globeGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.02,32,32),atmM));
+
+  const hsMat=new THREE.MeshStandardMaterial({color:0xC0392B,emissive:0xC0392B,emissiveIntensity:.5,roughness:.3});
+  const hs=new THREE.Mesh(new THREE.SphereGeometry(.024,16,16),hsMat);
+  hs.position.copy(ITALY_LOCAL);
+  globeGroup.add(hs);
+  hotspots=[{mesh:hs}];
+
+  const ringMat=new THREE.MeshBasicMaterial({color:0xC0392B,transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:false});
+  const ring=new THREE.Mesh(new THREE.RingGeometry(.032,.046,40),ringMat);
+  ring.position.copy(ITALY_LOCAL);ring.lookAt(0,0,0);
+  globeGroup.add(ring);pulseMeshes=[{mesh:ring}];
+
+  const italyWorld=ITALY_LOCAL.clone().applyEuler(new THREE.Euler(0,GLOBE_ROT_Y,0));
+  const camDir=italyWorld.clone().normalize();
+  camera.position.copy(camDir.multiplyScalar(2.6));
+  camera.position.y+=.1;camera.lookAt(0,0,0);
+  camera.fov=45;camera.updateProjectionMatrix();
+  orbitPos.copy(camera.position);
+}
+
+// Orbit controls
+canvas.addEventListener('mousedown',e=>{
+  isDragging=true;dragStart={x:e.clientX,y:e.clientY};orbitPos.copy(camera.position);
+  canvas.style.cursor='grabbing';
+});
+canvas.addEventListener('mouseup',()=>{isDragging=false;canvas.style.cursor='default';});
+canvas.addEventListener('mouseleave',()=>{isDragging=false;});
+
+canvas.addEventListener('mousemove',e=>{
+  if(isDragging){
+    const dx=(e.clientX-dragStart.x)*.005,dy=(e.clientY-dragStart.y)*.004;
+    const r=orbitPos.length();
+    let theta=Math.atan2(orbitPos.x,orbitPos.z)-dx;
+    let phi=Math.acos(Math.max(-.98,Math.min(.98,orbitPos.y/r)))-dy;
+    phi=Math.max(.1,Math.min(Math.PI*.82,phi));
+    orbitPos.set(r*Math.sin(phi)*Math.sin(theta),r*Math.cos(phi),r*Math.sin(phi)*Math.cos(theta));
+    dragStart.x=e.clientX;dragStart.y=e.clientY;
+    camera.position.copy(orbitPos);camera.lookAt(0,0,0);
+  }
+
+  const ndc=new THREE.Vector2((e.clientX/innerWidth)*2-1,-(e.clientY/innerHeight)*2+1);
+  raycaster.setFromCamera(ndc,camera);
+  const hits=raycaster.intersectObjects(hotspots.map(h=>h.mesh));
+  const hovering=hits.length>0;
+  canvas.style.cursor=hovering?'pointer':'default';
+  const cd=document.getElementById('cursor-dot');
+  cd.style.opacity=hovering?'1':'0';
+  cd.style.left=e.clientX+'px';cd.style.top=e.clientY+'px';
+});
+
+canvas.addEventListener('click',e=>{
+  const ndc=new THREE.Vector2((e.clientX/innerWidth)*2-1,-(e.clientY/innerHeight)*2+1);
+  raycaster.setFromCamera(ndc,camera);
+  const hits=raycaster.intersectObjects(hotspots.map(h=>h.mesh));
+  if(hits.length){window.location.href='country.html';}
+});
+
+canvas.addEventListener('wheel',e=>{
+  const r=orbitPos.length();
+  const nr=Math.max(1.2,Math.min(50,r+e.deltaY*.004));
+  orbitPos.setLength(nr);camera.position.setLength(nr);camera.lookAt(0,0,0);
+});
+
+// Touch support
+let touchId=null,touchStartPos={x:0,y:0};
+canvas.addEventListener('touchstart',e=>{
+  const t=e.changedTouches[0];if(!t)return;
+  touchId=t.identifier;isDragging=true;touchStartPos={x:t.clientX,y:t.clientY};
+  dragStart={x:t.clientX,y:t.clientY};orbitPos.copy(camera.position);
+},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const t=Array.from(e.changedTouches).find(tc=>tc.identifier===touchId)||e.changedTouches[0];
+  if(isDragging&&t){
+    const dx=(t.clientX-dragStart.x)*.005,dy=(t.clientY-dragStart.y)*.004;
+    const r=orbitPos.length();
+    let theta=Math.atan2(orbitPos.x,orbitPos.z)-dx;
+    let phi=Math.acos(Math.max(-.98,Math.min(.98,orbitPos.y/r)))-dy;
+    phi=Math.max(.1,Math.min(Math.PI*.82,phi));
+    orbitPos.set(r*Math.sin(phi)*Math.sin(theta),r*Math.cos(phi),r*Math.sin(phi)*Math.cos(theta));
+    dragStart.x=t.clientX;dragStart.y=t.clientY;
+    camera.position.copy(orbitPos);camera.lookAt(0,0,0);
+  }
+  const t2=e.changedTouches[0];
+  if(t2){
+    const ndc=new THREE.Vector2((t2.clientX/innerWidth)*2-1,-(t2.clientY/innerHeight)*2+1);
+    raycaster.setFromCamera(ndc,camera);
+    const hits=raycaster.intersectObjects(hotspots.map(h=>h.mesh));
+    const cd=document.getElementById('cursor-dot');
+    cd.style.opacity=hits.length?'1':'0';cd.style.left=t2.clientX+'px';cd.style.top=t2.clientY+'px';
+  }
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  if(e.changedTouches[0]){
+    const dist=Math.hypot(e.changedTouches[0].clientX-touchStartPos.x,e.changedTouches[0].clientY-touchStartPos.y);
+    if(dist<10){
+      const ndc=new THREE.Vector2((e.changedTouches[0].clientX/innerWidth)*2-1,-(e.changedTouches[0].clientY/innerHeight)*2+1);
+      raycaster.setFromCamera(ndc,camera);
+      const hits=raycaster.intersectObjects(hotspots.map(h=>h.mesh));
+      if(hits.length)window.location.href='country.html';
+    }
+  }
+  isDragging=false;touchId=null;
+});
+
+window.addEventListener('resize',()=>{
+  const w=innerWidth,h=innerHeight;
+  camera.aspect=w/h;camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+});
+
+function animate(){
+  requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+  pulseMeshes.forEach(p=>{
+    const scale=1+Math.sin(t*2.5)*.15;
+    p.mesh.scale.set(scale,scale,scale);
+    p.mesh.material.opacity=.3+Math.sin(t*2.2)*.15;
+  });
+  renderer.render(scene,camera);
+}
+
+buildEarth();
+animate();
+</script>
+</body>
+</html>

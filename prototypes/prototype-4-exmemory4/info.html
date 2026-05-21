@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Info — EXmemory v4.0</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f8f8f5;--fg:#1a1a16;--mid:#8a8a82;--red:#C0392B;--border:rgba(26,26,22,.12)}
+html.dark{--bg:#0c0c0a;--fg:#e8e8e2;--mid:#5a5a54;--red:#C0392B;--border:rgba(232,232,226,.1)}
+body{background:var(--bg);color:var(--fg);font-family:'DM Sans',sans-serif;transition:background .5s,color .5s;min-height:100vh}
+nav{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:20px 36px;z-index:20}
+nav a{font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);text-decoration:none;transition:color .2s}
+nav a:hover{color:var(--red)}
+#theme-btn{background:none;border:1px solid var(--border);color:var(--fg);font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;padding:8px 16px;cursor:pointer;transition:all .2s}
+#theme-btn:hover{background:var(--fg);color:var(--bg)}
+main{max-width:700px;margin:0 auto;padding:100px 36px 60px}
+h1{font-size:24px;font-weight:300;letter-spacing:.06em;margin-bottom:4px}
+.sub{font-size:10px;font-weight:500;letter-spacing:.22em;text-transform:uppercase;color:var(--red);margin-bottom:32px}
+h2{font-size:13px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;margin:32px 0 12px;color:var(--fg)}
+p{font-size:14px;font-weight:300;line-height:1.8;color:var(--fg);margin-bottom:12px;max-width:60ch}
+.placeholder{opacity:.4;font-style:italic;font-size:12px}
+</style>
+</head>
+<body>
+<nav>
+  <a href="index.html">← Home</a>
+  <button id="theme-btn">◐ Tema</button>
+</nav>
+<main>
+  <h1>Info</h1>
+  <div class="sub">EXmemory — EXpanded MEMORY</div>
+
+  <h2>Il progetto</h2>
+  <p>EXmemory è un archivio interattivo 3D dedicato alla memoria del terremoto del Centro Italia del 2016. Attraverso quattro livelli di esplorazione — dal globo terrestre alla stanza — il visitatore può vivere un'esperienza immersiva che connette dati geografici, testimonianze umane e ricostruzione architettonica.</p>
+  <p>Nella notte del 24 agosto 2016, un terremoto di magnitudo 6.2 ha colpito il Centro Italia, devastando i comuni di Amatrice, Accumoli e Arquata del Tronto. A seguire, la sequenza sismica ha registrato oltre 100.000 eventi in due anni, tra cui le forti scosse del 26 agosto (Mw 5.8) e del 30 ottobre (Mw 6.5). 299 persone hanno perso la vita, interi borghi sono stati rasi al suolo, e un patrimonio culturale secolare è andato perduto.</p>
+  <p>EXmemory nasce per non dimenticare. Non come un documentario, ma come uno spazio esplorabile — un archivio tridimensionale dove i dati sismici, le immagini satellitari, le testimonianze e gli oggetti quotidiani si incontrano per restituire la complessità di un evento che ha cambiato per sempre il volto di queste comunità.</p>
+
+  <h2>Fonti dei dati</h2>
+  <p>Elevazione: <strong>NASA SRTM</strong> (Shuttle Radar Topography Mission) via AWS Terrarium tiles.<br>
+  Immagini satellitari: <strong>ESRI World Imagery</strong> (country) e <strong>NASA Blue Marble</strong> (globo).<br>
+  Dati edifici: <strong>OpenStreetMap</strong> — edifici di Amatrice prima del sisma.<br>
+  Dati sismici: <strong>INGV</strong> — Rete Sismica Nazionale.</p>
+  <p>Elevazione: <strong>NASA SRTM</strong> (Shuttle Radar Topography Mission) — <a href="https://www2.jpl.nasa.gov/srtm/" style="color:var(--red)">jpl.nasa.gov/srtm</a>, distribuito via <strong>AWS Terrarium</strong> — <a href="https://registry.opendata.aws/terrain-tiles/" style="color:var(--red)">registry.opendata.aws/terrain-tiles</a>.<br>
+  Immagini satellitari: <strong>ESRI World Imagery</strong> — <a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" style="color:var(--red)">ArcGIS World Imagery</a>, <strong>NASA Blue Marble</strong> — <a href="https://visibleearth.nasa.gov/collection/1484/blue-marble" style="color:var(--red)">visibleearth.nasa.gov</a>.<br>
+  Dati edifici: <strong>OpenStreetMap</strong> — <a href="https://www.openstreetmap.org/relation/4225965" style="color:var(--red)">openstreetmap.org</a>, edifici di Amatrice precedenti al sisma.<br>
+  Dati sismici: <strong>INGV</strong> — <a href="https://ingv.it" style="color:var(--red)">ingv.it</a>, Rete Sismica Nazionale e Catalogo Parametrico dei Terremoti Italiani.<br>
+  Libreria 3D: <strong>Three.js</strong> v0.158.0 — <a href="https://threejs.org" style="color:var(--red)">threejs.org</a>.<br>
+  Font: <strong>DM Sans</strong> — <a href="https://fonts.google.com/specimen/DM+Sans" style="color:var(--red)">Google Fonts</a>.</p>
+  <p>Tutti i dati sono utilizzati secondo le rispettive licenze: NASA SRTM (pubblico dominio), ESRI (fair use / educational), OpenStreetMap (ODbL), INGV (CC BY 4.0).</p>
+
+  <h2>Credits</h2>
+  <p>Progetto concepito e sviluppato da <strong>G. Cappellini</strong>.<br>
+  Si ringraziano: Massimo per la testimonianza vocale, INGV per i dati sismici, e la comunità di OpenStreetMap per i dati geografici.</p>
+
+  <h2>Tecnologie</h2>
+  <p>Three.js (WebGL), NASA Blue Marble / ESRI World Imagery (texture satellitari), AWS Terrarium (elevazione SRTM), DM Sans (typography).<br>
+  Interamente client-side, nessun server richiesto.</p>
+</main>
+<script>
+const th=document.getElementById('theme-btn');
+if(localStorage.getItem('exm_theme')==='dark'){document.documentElement.classList.add('dark');th.textContent='☀ Tema'}
+th.addEventListener('click',()=>{
+  document.documentElement.classList.toggle('dark');
+  const d=document.documentElement.classList.contains('dark');
+  th.textContent=d?'☀ Tema':'◐ Tema';
+  localStorage.setItem('exm_theme',d?'dark':'light');
+});
+</script>
+</body>
+</html>

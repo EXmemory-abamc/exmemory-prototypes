@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Italia Centrale — EXmemory v5</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0c0c0a;--fg:#e8e8e2;--mid:#5a5a54;--red:#C0392B;--border:rgba(232,232,226,.1)}
+body{background:var(--bg);color:var(--fg);font-family:'DM Sans',sans-serif;overflow:hidden;transition:background .5s,color .5s}
+#canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+nav{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:28px 36px;z-index:20;pointer-events:none}
+nav a{font-size:10px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:var(--mid);text-decoration:none;pointer-events:all;transition:color .2s}
+nav a:hover{color:var(--red)}
+nav div{display:flex;align-items:center;gap:12px}
+
+#hint{position:fixed;bottom:36px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;color:var(--mid);opacity:.7;z-index:20;pointer-events:none;text-align:center;white-space:nowrap}
+#loading-bar{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;display:flex;flex-direction:column;align-items:center;gap:14px;pointer-events:none}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-bar .label{font-size:9px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--mid)}
+#country-labels{position:fixed;inset:0;pointer-events:none;z-index:15}
+.region-label{position:absolute;transform:translate(-50%,-50%);font-size:10px;font-weight:500;letter-spacing:.18em;text-transform:uppercase;color:var(--mid);transition:color .3s,opacity .3s;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.35)}
+.region-label.amatrice{color:var(--red)}
+.region-label.sea{opacity:.5;font-style:italic}
+#cursor-dot{position:fixed;width:10px;height:10px;border-radius:50%;border:2px solid var(--red);background:transparent;pointer-events:none;z-index:100;opacity:0;transform:translate(-50%,-50%);transition:opacity .2s,transform .15s}
+#fade-in{position:fixed;inset:0;z-index:9999;background:var(--bg);animation:fadeOut .8s ease-out forwards;pointer-events:none}
+@keyframes fadeOut{0%{opacity:1}100%{opacity:0}}
+</style>
+</head>
+<body>
+<div id="fade-in"></div>
+<canvas id="canvas"></canvas>
+<nav>
+  <div>
+    <a href="globe.html">← Globo</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <svg width="20" height="20" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="none" stroke="#C0392B" stroke-width="4"/><circle cx="50" cy="50" r="18" fill="none" stroke="#C0392B" stroke-width="3"/><line x1="50" y1="5" x2="50" y2="95" stroke="#C0392B" stroke-width="2" opacity=".4"/><line x1="5" y1="50" x2="95" y2="50" stroke="#C0392B" stroke-width="2" opacity=".4"/></svg>
+    <span style="font-size:11px;font-weight:600;letter-spacing:.22em;color:var(--fg)">EXmemory</span>
+    <span style="font-size:8px;font-weight:400;letter-spacing:.18em;color:var(--mid)">IMMERSIVE COLLECTIVE MEMORY</span>
+  </div>
+  <div>
+    <a href="city.html" id="next-link">Amatrice →</a>
+  </div>
+</nav>
+<div id="loading-bar" style="display:none"><div class="spinner"></div><div class="label">Caricamento terreno</div></div>
+<div id="hint">Clicca il punto rosso · Trascina per ruotare · Scorri per zoomare</div>
+<div id="country-labels">
+  <span class="region-label sea" id="lbl-tirreno">Mar Tirreno</span>
+  <span class="region-label sea" id="lbl-adriatico">Mar Adriatico</span>
+  <span class="region-label" id="lbl-toscana">Toscana</span>
+  <span class="region-label" id="lbl-umbria">Umbria</span>
+  <span class="region-label" id="lbl-marche">Marche</span>
+  <span class="region-label" id="lbl-lazio">Lazio</span>
+  <span class="region-label" id="lbl-abruzzo">Abruzzo</span>
+  <span class="region-label amatrice" id="lbl-amatrice">Amatrice</span>
+</div>
+<div id="cursor-dot"></div>
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+<script>
+const canvas=document.getElementById('canvas');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,logarithmicDepthBuffer:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.polygonOffset=true;renderer.polygonOffsetFactor=-1;renderer.polygonOffsetUnits=-1;
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,.001,1000);
+const clock=new THREE.Clock();
+const raycaster=new THREE.Raycaster();
+
+const darkMode=true;
+let isDragging=false;
+let theta=-0.245,phi=0.752,radius=8.5,targetTheta=-0.245,targetPhi=0.752;
+let centerTheta=-0.245,centerPhi=0.752;
+let amatriceSphere,hovering=false;
+const hotspotMeshes=[];
+const pulseObjs=[];
+
+const REGION_3D={
+  'lbl-toscana':  new THREE.Vector3(-3.2,.35,-2.5),
+  'lbl-umbria':   new THREE.Vector3(-1.2,.5,-1.2),
+  'lbl-marche':   new THREE.Vector3(0.8,.4,-2.5),
+  'lbl-lazio':    new THREE.Vector3(-1.8,.25,1.5),
+  'lbl-abruzzo':  new THREE.Vector3(1,.35,.8),
+  'lbl-adriatico':new THREE.Vector3(5.2,.01,-1.2),
+  'lbl-tirreno':  new THREE.Vector3(-5.2,.01,.3),
+  'lbl-amatrice': new THREE.Vector3(0,.72,0),
+};
+
+const C={
+  bg:()=>0x0c0c0a,
+  sea:()=>0x0f0f0d,
+  mid:()=>0x444440,
+};
+
+
+
+function setupLights(){
+  scene.children.filter(c=>c.isLight).forEach(l=>scene.remove(l));
+  scene.add(new THREE.AmbientLight(0xffffff,.35));
+  const dir=new THREE.DirectionalLight(0xffffff,1.4);
+  dir.position.set(3,5,3);scene.add(dir);
+}
+
+function addPulseRing(position,horizontal){
+  const geo=new THREE.RingGeometry(.032,.046,40);
+  const mat=new THREE.MeshBasicMaterial({color:0xC0392B,transparent:true,opacity:.6,side:THREE.DoubleSide,depthWrite:false});
+  const ring=new THREE.Mesh(geo,mat);
+  ring.position.copy(position);
+  if(horizontal)ring.rotation.x=-Math.PI/2;
+  else ring.lookAt(0,0,0);
+  scene.add(ring);pulseObjs.push({mesh:ring});
+}
+
+// === EXmemory_4 terrain build (identico) ===
+function buildCountry(){
+  scene.children.forEach(o=>{if(o.geometry)o.geometry.dispose();if(o.material){const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});
+  while(scene.children.length)scene.remove(scene.children[0]);
+  setupLights();
+  scene.background=new THREE.Color(C.bg());
+  document.getElementById('country-labels').style.display='block';
+  document.getElementById('loading-bar').style.display='flex';
+  hotspotMeshes.length=0;pulseObjs.length=0;window.__countryTerrain=null;
+
+  const ZOOM=8,TILE_X=[135,136,137,138,139],TILE_Y=[93,94,95];
+  const TILES=TILE_X.length*TILE_Y.length,TILE_PX=256;
+  const CANVAS_W=TILE_X.length*TILE_PX,CANVAS_H=TILE_Y.length*TILE_PX;
+  const SIZE_X=15,SIZE_Z=9,SEG_X=150,SEG_Z=90;
+  const LOAD_TOTAL=TILES*2;
+
+  const seaMat=new THREE.MeshStandardMaterial({color:C.sea(),roughness:1});
+  const sea=new THREE.Mesh(new THREE.PlaneGeometry(SIZE_X+4,SIZE_Z+4),seaMat);
+  sea.rotation.x=-Math.PI/2;sea.position.y=-.015;scene.add(sea);
+
+
+
+  const geo=new THREE.PlaneGeometry(SIZE_X,SIZE_Z,SEG_X,SEG_Z);
+  const pos=geo.attributes.position;
+  const hCV=document.createElement('canvas');hCV.width=CANVAS_W;hCV.height=CANVAS_H;
+  const hCtx=hCV.getContext('2d');
+  const tCV=document.createElement('canvas');tCV.width=CANVAS_W;tCV.height=CANVAS_H;
+  const tCtx=tCV.getContext('2d');
+  let loaded=0,terrainRendered=0;
+
+  (function proceduralFallback(){
+    for(let py=0;py<CANVAS_H;py++)for(let px=0;px<CANVAS_W;px++){
+      const nx=px/CANVAS_W*6,ny=py/CANVAS_H*6;
+      const h=Math.sin(nx*1.3+ny*.7)*.08+Math.sin(nx*2.7-ny*1.1)*.04+Math.cos(ny*3.2)*.06;
+      const v=Math.round((h+.18)/.36*230);
+      hCtx.fillStyle=`rgb(${v},${v},${v})`;hCtx.fillRect(px,py,1,1);
+      const green=Math.round(120+Math.sin(nx*4+ny*2)*40+Math.random()*8);
+      const brown=Math.round(80+Math.sin(ny*6-nx*3)*30);
+      tCtx.fillStyle=`rgb(${brown},${green},${Math.round(brown*.6)})`;tCtx.fillRect(px,py,1,1);
+    }
+  })();
+  showTerrain();
+
+  for(let tx=0;tx<TILE_X.length;tx++)for(let ty=0;ty<TILE_Y.length;ty++){
+    const x=TILE_X[tx],y=TILE_Y[ty];
+    const hImg=new Image();hImg.crossOrigin='anonymous';
+    hImg.onload=()=>{hCtx.drawImage(hImg,tx*TILE_PX,ty*TILE_PX,TILE_PX,TILE_PX);loaded++;if(loaded===LOAD_TOTAL)showTerrain()};
+    hImg.onerror=()=>{loaded++;if(loaded===LOAD_TOTAL)showTerrain()};
+    hImg.src=`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${ZOOM}/${x}/${y}.png`;
+    const tImg=new Image();tImg.crossOrigin='anonymous';
+    tImg.onload=()=>{tCtx.drawImage(tImg,tx*TILE_PX,ty*TILE_PX,TILE_PX,TILE_PX);loaded++;if(loaded===LOAD_TOTAL)showTerrain()};
+    tImg.onerror=()=>{loaded++;if(loaded===LOAD_TOTAL)showTerrain()};
+    tImg.src=`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${ZOOM}/${y}/${x}`;
+  }
+
+  function showTerrain(){
+    if(++terrainRendered>2)return;
+    document.getElementById('loading-bar').style.display='none';
+    const hData=hCtx.getImageData(0,0,CANVAS_W,CANVAS_H);
+    const elevMap=new Float32Array(CANVAS_W*CANVAS_H);
+    for(let py=0;py<CANVAS_H;py++)for(let px=0;px<CANVAS_W;px++){
+      const i=(py*CANVAS_W+px)*4;
+      const el=(hData.data[i]*256+hData.data[i+1]+hData.data[i+2]/256)-32768;
+      elevMap[py*CANVAS_W+px]=Math.max(0,el);
+    }
+    for(let i=0;i<pos.count;i++){
+      const vx=pos.getX(i),vz=pos.getY(i);
+      const px=Math.round((vx/SIZE_X+0.5)*(CANVAS_W-1));
+      const py=Math.round((0.5-vz/SIZE_Z)*(CANVAS_H-1));
+      const ci=Math.max(0,Math.min(CANVAS_H-1,py))*CANVAS_W+Math.max(0,Math.min(CANVAS_W-1,px));
+      pos.setZ(i,Math.max(0,(elevMap[ci]||0)/2900*0.7));
+    }
+    pos.needsUpdate=true;geo.computeVertexNormals();
+    const satTex=new THREE.CanvasTexture(tCV);
+    satTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+    const tMat=new THREE.MeshStandardMaterial({map:satTex,roughness:.85});
+    const terrain=new THREE.Mesh(geo,tMat);terrain.rotation.x=-Math.PI/2;
+    if(window.__countryTerrain)scene.remove(window.__countryTerrain);
+    scene.add(terrain);window.__countryTerrain=terrain;
+  }
+
+  const hsMat=new THREE.MeshStandardMaterial({color:0xC0392B,emissive:0xC0392B,emissiveIntensity:.5,roughness:.3});
+  const hs=new THREE.Mesh(new THREE.SphereGeometry(.08,16,16),hsMat);
+  hs.position.set(0,.7,0);scene.add(hs);
+  hotspotMeshes.push({mesh:hs});
+  amatriceSphere=hs;
+  addPulseRing(new THREE.Vector3(0,.71,0),true);
+
+  // Initialize camera for this terrain
+  theta=1.2;phi=.6;radius=10;
+  updateCamera();
+}
+
+function updateCamera(){
+  camera.position.set(radius*Math.sin(theta)*Math.cos(phi),radius*Math.sin(phi),radius*Math.cos(theta)*Math.cos(phi));
+  camera.lookAt(0,.2,0);
+}
+
+buildCountry();
+
+// === Controls (theta/phi orbiting con centerTheta/Phi fix) ===
+// Drag
+let dragStart={x:0,y:0,theta:0,phi:0};
+canvas.addEventListener('mousedown',e=>{
+  isDragging=true;
+  dragStart={x:e.clientX,y:e.clientY,theta,phi};
+  canvas.style.cursor='grabbing';
+});
+canvas.addEventListener('mouseup',()=>{isDragging=false;targetTheta=theta;targetPhi=phi;centerTheta=theta;centerPhi=phi;canvas.style.cursor='default'});
+canvas.addEventListener('mouseleave',()=>{isDragging=false;targetTheta=theta;targetPhi=phi;centerTheta=theta;centerPhi=phi});
+
+// Mouse move
+let targetMouseX=0,targetMouseY=0,mouseX=0,mouseY=0;
+canvas.addEventListener('mousemove',e=>{
+  const ndcX=(e.clientX/innerWidth)*2-1,ndcY=-(e.clientY/innerHeight)*2+1;
+  mouseX=ndcX;mouseY=ndcY;
+  if(isDragging){
+    theta=dragStart.theta-(e.clientX-dragStart.x)*.005;
+    phi=Math.max(-1.1,Math.min(1.3,dragStart.phi+(e.clientY-dragStart.y)*.003));
+  } else {
+    targetMouseX=ndcX;targetMouseY=ndcY;
+  }
+  // Cursor dot
+  const cd=document.getElementById('cursor-dot');
+  cd.style.left=e.clientX+'px';cd.style.top=e.clientY+'px';
+});
+
+// Wheel
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  radius=Math.max(3,Math.min(20,radius+e.deltaY*.01));
+  updateCamera();
+},{passive:false});
+
+// Click
+canvas.addEventListener('click',e=>{
+  const ndc=new THREE.Vector2((e.clientX/innerWidth)*2-1,-(e.clientY/innerHeight)*2+1);
+  raycaster.setFromCamera(ndc,camera);
+  const hits=raycaster.intersectObjects(hotspotMeshes.map(h=>h.mesh));
+  if(hits.length>0)window.location.href='city.html';
+});
+
+// Resize
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// Labels
+function updateLabels(){
+  const v=new THREE.Vector3();
+  Object.entries(REGION_3D).forEach(([id,p])=>{
+    const el=document.getElementById(id);if(!el)return;
+    v.copy(p);
+    v.project(camera);
+    el.style.left=(v.x*.5+.5)*innerWidth+'px';
+    el.style.top=(-.5*v.y+.5)*innerHeight+'px';
+    el.style.display=(v.z<1)?'block':'none';
+  });
+}
+
+// Animate
+function animate(){
+  requestAnimationFrame(animate);
+  // Parallax
+  if(!isDragging){
+    targetTheta=centerTheta+targetMouseX*0.5;
+    targetPhi=Math.max(-1.1,Math.min(1.3,centerPhi-targetMouseY*0.3));
+    theta+=(targetTheta-theta)*.04;
+    phi+=(targetPhi-phi)*.04;
+  }
+  updateCamera();
+  updateLabels();
+
+  // Pulse
+  const t=clock.getElapsedTime();
+  pulseObjs.forEach(p=>{const s=1+Math.sin(t*2.5)*.15;p.mesh.scale.set(s,s,s);p.mesh.material.opacity=.3+Math.sin(t*2.2)*.15});
+
+  // Cursor-dot on hotspot
+  const ndc2=new THREE.Vector2(mouseX||0,mouseY||0);
+  raycaster.setFromCamera(ndc2,camera);
+  hovering=raycaster.intersectObjects(hotspotMeshes.map(h=>h.mesh)).length>0;
+  const cd=document.getElementById('cursor-dot');
+  cd.style.opacity=hovering?'1':'0';
+  cd.style.transform=hovering?'translate(-50%,-50%) scale(1.8)':'translate(-50%,-50%) scale(1)';
+
+  renderer.render(scene,camera);
+}
+
+theta=1.2;phi=.6;radius=10;updateCamera();
+animate();
+</script>
+</body>
+</html>
