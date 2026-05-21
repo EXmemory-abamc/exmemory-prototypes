@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Text-to-3D Environment Generator</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <h1>Text → 3D</h1>
+        <p class="subtitle">Generate 3D environments from text descriptions</p>
+
+        <!-- ─── Mode Tabs ─── -->
+        <div id="mode-tabs">
+          <button class="tab active" data-mode="user">User</button>
+          <button class="tab" data-mode="structured">Structured</button>
+          <button class="tab" data-mode="moderator">Moderator</button>
+        </div>
+
+        <!-- ─── PANEL: User ─── -->
+        <div id="panel-user" class="panel active">
+          <div class="panel-content">
+            <textarea
+              id="description-input"
+              placeholder="Describe a 3D environment in natural language...&#10;&#10;e.g. 'A mountain lake at sunset with pine trees and a wooden cabin by the shore'"
+              rows="5"
+            ></textarea>
+            <button id="user-submit-btn" class="btn-primary" disabled>Submit to Moderator</button>
+            <p id="status-message" class="status-idle">Describe the scene you want to create.</p>
+          </div>
+        </div>
+
+        <!-- ─── PANEL: Structured ─── -->
+        <div id="panel-structured" class="panel">
+          <div class="panel-content">
+            <label class="field-label">Quick Presets</label>
+            <select id="structured-preset-select">
+              <option value="">— Load a preset —</option>
+            </select>
+            <p class="panel-hint">Describe your scene line by line:</p>
+            <textarea
+              id="structured-input"
+              placeholder="sky: sunset top #ff6b35 bottom #f7c948&#10;ground: terrain color #4a7c3f&#10;light: directional from (8, 12, 6) shadow&#10;add: tree at (-3, 0, 2) color #5c8a3f&#10;add: rock at (1, 0, 3) color #666666"
+              rows="6"
+            ></textarea>
+            <button id="structured-submit-btn" class="btn-primary">Generate</button>
+          </div>
+        </div>
+
+        <!-- ─── PANEL: Moderator ─── -->
+        <div id="panel-moderator" class="panel">
+          <div class="panel-content">
+            <!-- User's description reference -->
+            <div id="mod-user-ref" class="mod-ref-box">
+              <span class="mod-ref-label">User said:</span>
+              <p id="mod-user-description" class="mod-ref-text"><em>No description yet.</em></p>
+            </div>
+
+            <!-- Preset selector -->
+            <label class="field-label">Prompt Preset</label>
+            <select id="preset-select"></select>
+
+            <!-- Prompt preview -->
+            <label class="field-label">Prompt Preview</label>
+            <div id="prompt-preview" class="code-block"></div>
+            <button id="copy-prompt-btn" class="btn-secondary">Copy Prompt</button>
+
+            <!-- JSON paste area -->
+            <label class="field-label">LLM JSON Response</label>
+            <textarea
+              id="json-paste-area"
+              placeholder="Paste the JSON output from the LLM here..."
+              rows="6"
+            ></textarea>
+
+            <!-- Validation feedback -->
+            <div id="validation-result" class="validation-box"></div>
+
+            <!-- Actions -->
+            <div class="mod-actions">
+              <button id="validate-json-btn" class="btn-secondary">Validate JSON</button>
+              <button id="render-scene-btn" class="btn-primary" disabled>Render Scene</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── History Section ─── -->
+        <div id="history-section">
+          <div id="history-header">
+            <span class="field-label">Render History</span>
+            <button id="history-clear-btn" class="btn-icon" title="Clear History">✕</button>
+          </div>
+          <div id="history-list">
+            <p id="history-empty" class="history-empty">No renders yet.</p>
+          </div>
+        </div>
+      </aside>
+
+      <main id="viewport">
+        <div id="three-container"></div>
+        <div id="scene-controls">
+          <button data-action="back" title="Previous Render" disabled>←</button>
+          <button data-action="wireframe" title="Toggle Wireframe">◇</button>
+          <button data-action="axes" title="Toggle Axes">⌖</button>
+          <button data-action="grid" title="Toggle Grid">▦</button>
+          <button data-action="reset-camera" title="Reset Camera">⟲</button>
+          <button data-action="screenshot" title="Screenshot">◻</button>
+        </div>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

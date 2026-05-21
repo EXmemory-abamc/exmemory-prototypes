@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>SISMA 2016 — Room 3D</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+/* ===== RESET & BASE ===== */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'DM Sans',sans-serif;color:#e8e8e2}
+
+/* ===== LOADING SCREEN ===== */
+#loading-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0c0c0a;transition:opacity .8s}
+#loading-screen.hidden{opacity:0;pointer-events:none}
+#loading-screen .spinner{width:32px;height:32px;border:2px solid rgba(232,232,226,.12);border-top-color:#C0392B;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:18px}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-screen .label{font-size:10px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:#5a5a54;margin-bottom:24px}
+#loading-screen .bar-wrap{width:200px;height:2px;background:rgba(232,232,226,.08);border-radius:1px;overflow:hidden}
+#loading-screen .bar-fill{height:100%;width:0%;background:#C0392B;border-radius:1px;transition:width .3s}
+
+/* ===== POPUP OVERLAY ===== */
+#popup-overlay{position:fixed;inset:0;z-index:500;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+#popup-overlay.visible{display:flex}
+#popup{position:relative;width:90%;max-width:520px;max-height:85vh;overflow-y:auto;background:#1a1a16;border:1px solid rgba(232,232,226,.1);border-radius:12px;padding:36px 32px 28px;animation:fadeUp .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}}
+#popup .close{position:absolute;top:12px;right:16px;background:none;border:none;color:#5a5a54;font-size:18px;cursor:pointer;padding:4px 8px;transition:color .2s;font-family:'DM Sans',sans-serif}
+#popup .close:hover{color:#e8e8e2}
+#popup h2{font-size:13px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#C0392B;margin-bottom:2px}
+#popup h1{font-size:22px;font-weight:300;letter-spacing:.04em;margin-bottom:16px;color:#e8e8e2}
+#popup .media{margin-bottom:16px;border-radius:8px;overflow:hidden;background:#2a2a24}
+#popup .media img,#popup .media iframe{width:100%;display:block;border:none}
+#popup .media iframe{aspect-ratio:16/9}
+#popup p{font-size:13px;font-weight:300;line-height:1.7;color:#b0b0a8;margin-bottom:10px}
+#popup .data-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;margin:12px 0 16px;padding:12px;background:rgba(192,57,43,.06);border-radius:6px}
+#popup .data-grid .d-label{font-size:9px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;color:#5a5a54}
+#popup .data-grid .d-value{font-size:12px;color:#e8e8e2;font-weight:400}
+#popup a{color:#C0392B;text-decoration:none;font-size:12px;font-weight:500}
+#popup a:hover{text-decoration:underline}
+#popup .source{font-size:10px;color:#5a5a54;margin-top:8px;display:block}
+
+/* ===== HOTSPOT LABELS (CSS2D) ===== */
+.hotspot-label{position:absolute;pointer-events:none;font-size:9px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;color:#e8e8e2;text-shadow:0 0 12px rgba(0,0,0,.8),0 0 4px rgba(0,0,0,.9);transform:translate(-50%,-50%);white-space:nowrap;transition:opacity .3s}
+
+/* ===== CANVAS ===== */
+#canvas{display:block;width:100vw;height:100vh}
+
+/* ===== INFO BAR ===== */
+#info{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);font-size:9px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;color:#5a5a54;text-align:center;pointer-events:none;opacity:.7;z-index:10}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div class="label">Caricamento ambiente</div>
+  <div class="bar-wrap"><div class="bar-fill" id="load-bar"></div></div>
+</div>
+
+<!-- POPUP OVERLAY -->
+<div id="popup-overlay">
+  <div id="popup">
+    <button class="close" id="popup-close">✕</button>
+    <div id="popup-content"></div>
+  </div>
+</div>
+
+<!-- THREE.JS CANVAS -->
+<canvas id="canvas"></canvas>
+
+<!-- INFO -->
+<div id="info">Trascina per esplorare · Tocca i punti rossi per approfondire</div>
+
+<!-- LABELS CONTAINER (for CSS-positioned labels) -->
+<div id="labels-container" style="position:fixed;inset:0;pointer-events:none;z-index:2"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+// ============================================================
+// SISMA 2016 — Room 3D Installation
+// An immersive, devastated room experience using Three.js
+// ============================================================
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- DOM refs ----------
+const canvas = document.getElementById('canvas');
+const loadingScreen = document.getElementById('loading-screen');
+const loadBar = document.getElementById('load-bar');
+const popupOverlay = document.getElementById('popup-overlay');
+const popupContent = document.getElementById('popup-content');
+const labelsContainer = document.getElementById('labels-container');
+
+// ---------- Loading manager ----------
+const loadingManager = new THREE.LoadingManager();
+let loadTotal = 0, loadDone = 0;
+
+loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+  loadTotal = itemsTotal;
+  loadDone = itemsLoaded;
+  const pct = itemsTotal > 0 ? (itemsLoaded / itemsTotal) * 100 : 50;
+  loadBar.style.width = Math.min(pct, 100) + '%';
+};
+
+loadingManager.onLoad = () => {
+  loadBar.style.width = '100%';
+  setTimeout(() => { loadingScreen.classList.add('hidden'); }, 400);
+};
+
+loadingManager.onError = (url) => {
+  // Silently handle — textures have fallbacks
+  console.warn('Texture load error (using fallback):', url);
+};
+
+// Force-hide loading after 8s regardless
+setTimeout(() => {
+  loadBar.style.width = '100%';
+  setTimeout(() => loadingScreen.classList.add('hidden'), 500);
+}, 8000);
+
+// ============================================================
+// 1. RENDERER, SCENE, CAMERA
+// ============================================================
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c0c0a);
+scene.fog = new THREE.Fog(0x0c0c0a, 8, 18);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 30);
+camera.position.set(3, 2.2, 4.5);
+
+const controls = new OrbitControls(camera, canvas);
+controls.target.set(0, 1.2, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 1.2;
+controls.maxDistance = 7;
+controls.maxPolarAngle = Math.PI * 0.82;
+controls.minPolarAngle = 0.1;
+controls.update();
+
+// ============================================================
+// 2. PROCEDURAL TEXTURE GENERATORS (fallback + primary)
+// ============================================================
+
+/** Create a CanvasTexture with procedural cracked plaster */
+function makeCrackedPlaster(w = 512, h = 512) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+
+  // Base plaster color
+  ctx.fillStyle = '#b8b0a0';
+  ctx.fillRect(0, 0, w, h);
+
+  // Noise overlay
+  for (let i = 0; i < 8000; i++) {
+    const x = Math.random() * w, y = Math.random() * h;
+    const g = 140 + Math.random() * 60;
+    ctx.fillStyle = `rgba(${g},${g - 10},${g - 20},0.15)`;
+    ctx.fillRect(x, y, 4, 4);
+  }
+
+  // Cracks
+  ctx.strokeStyle = 'rgba(60,50,40,0.5)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 12; i++) {
+    ctx.beginPath();
+    let x = Math.random() * w, y = Math.random() * h;
+    ctx.moveTo(x, y);
+    const steps = 20 + Math.random() * 40;
+    for (let s = 0; s < steps; s++) {
+      x += (Math.random() - 0.5) * 12;
+      y += (Math.random() - 0.5) * 12;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Darker stain spots
+  for (let i = 0; i < 30; i++) {
+    const x = Math.random() * w, y = Math.random() * h, r = 4 + Math.random() * 20;
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, 'rgba(80,70,60,0.2)');
+    grad.addColorStop(1, 'rgba(80,70,60,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+
+  return c;
+}
+
+/** Create a procedural normal map */ 
+function makeNormalMap(w = 512, h = 512) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  // Default normal (128,128,255) with slight variation
+  const img = ctx.createImageData(w, h);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 30;
+    img.data[i] = 128 + n;
+    img.data[i + 1] = 128 + n;
+    img.data[i + 2] = 255;
+    img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+
+/** Create broken tile floor texture */
+function makeBrokenTile(w = 512, h = 512) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = '#8a8880';
+  ctx.fillRect(0, 0, w, h);
+
+  // Tile grid with gaps/cracks
+  const ts = 64; // tile size
+  ctx.strokeStyle = 'rgba(60,55,50,0.4)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += ts) {
+    for (let y = 0; y < h; y += ts) {
+      // Random tile color variation
+      const b = 120 + Math.random() * 50;
+      ctx.fillStyle = `rgba(${b + 10},${b},${b - 10},0.5)`;
+      ctx.fillRect(x + 1, y + 1, ts - 2, ts - 2);
+
+      // Some tiles are broken (darker)
+      if (Math.random() < 0.2) {
+        ctx.fillStyle = 'rgba(50,45,40,0.3)';
+        ctx.fillRect(x + ts * 0.2, y + ts * 0.2, ts * 0.6, ts * 0.6);
+      }
+
+      // Crack lines at tile boundaries
+      ctx.beginPath(); ctx.moveTo(x, y);
+      ctx.lineTo(x + ts * (0.3 + Math.random() * 0.4), y + Math.random() * ts * 0.3);
+      ctx.stroke();
+    }
+  }
+
+  // Overall grime
+  for (let i = 0; i < 200; i++) {
+    const x = Math.random() * w, y = Math.random() * h;
+    ctx.fillStyle = `rgba(40,35,30,${Math.random() * 0.08})`;
+    ctx.fillRect(x, y, 10 + Math.random() * 30, 10 + Math.random() * 30);
+  }
+
+  return c;
+}
+
+/** Create cracked ceiling texture */
+function makeDamagedCeiling(w = 512, h = 512) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+
+  ctx.fillStyle = '#a09888';
+  ctx.fillRect(0, 0, w, h);
+
+  // Large dark patch (missing plaster)
+  const cx = 150 + Math.random() * 200, cy = 150 + Math.random() * 200;
+  const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, 120);
+  grad.addColorStop(0, 'rgba(50,45,40,0.6)');
+  grad.addColorStop(0.5, 'rgba(70,65,55,0.3)');
+  grad.addColorStop(1, 'rgba(70,65,55,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(cx, cy, 120, 0, Math.PI * 2); ctx.fill();
+
+  // Rebar hints (dark lines in exposed area)
+  ctx.strokeStyle = 'rgba(120,80,60,0.5)';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 4; i++) {
+    const ax = cx - 40 + Math.random() * 80, ay = cy - 40 + Math.random() * 80;
+    ctx.beginPath();
+    ctx.moveTo(ax - 30, ay - 30);
+    ctx.lineTo(ax + 30, ay + 30);
+    ctx.stroke();
+  }
+
+  return c;
+}
+
+// ============================================================
+// 3. CREATE TEXTURES
+// ============================================================
+const texLoader = new THREE.TextureLoader(loadingManager);
+
+function makeMatrial(colorMap, normalMap, roughness = 0.85, metalness = 0) {
+  const m = new THREE.MeshStandardMaterial({
+    map: colorMap,
+    normalMap: normalMap,
+    roughness: roughness,
+    metalness: metalness,
+  });
+  return m;
+}
+
+// Generate procedural textures (always work — no network needed)
+const plasterCanvas = makeCrackedPlaster();
+const plasterTex = new THREE.CanvasTexture(plasterCanvas);
+plasterTex.wrapS = plasterTex.wrapT = THREE.RepeatWrapping;
+plasterTex.repeat.set(2, 2);
+
+const normalCanvas = makeNormalMap();
+const normalTex = new THREE.CanvasTexture(normalCanvas);
+normalTex.wrapS = normalTex.wrapT = THREE.RepeatWrapping;
+normalTex.repeat.set(2, 2);
+
+const floorCanvas = makeBrokenTile();
+const floorTex = new THREE.CanvasTexture(floorCanvas);
+floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping;
+floorTex.repeat.set(2, 2);
+
+const ceilingCanvas = makeDamagedCeiling();
+const ceilingTex = new THREE.CanvasTexture(ceilingCanvas);
+ceilingTex.wrapS = ceilingTex.wrapT = THREE.RepeatWrapping;
+ceilingTex.repeat.set(2, 2);
+
+// Try loading real texture from ambientCG for enhanced look
+texLoader.load(
+  'https://cdn.ambientcg.com/Concrete012_1K-JPG/Concrete012_1K_Color.jpg',
+  (tex) => { tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(2, 2); plasterTex.image = tex.image; plasterTex.needsUpdate = true; },
+  undefined,
+  () => {} // fallback: keep procedural texture
+);
+
+// ============================================================
+// 4. ROOM GEOMETRY
+// ============================================================
+// Room: 6m wide (X), 5m deep (Z), 3m tall (Y)
+const ROOM_W = 6, ROOM_D = 5, ROOM_H = 3;
+
+// Wall materials
+const wallMat = makeMatrial(plasterTex, normalTex, 0.9, 0);
+const floorMat = makeMatrial(floorTex, normalTex, 0.95, 0);
+const ceilingMat = makeMatrial(ceilingTex, normalTex, 0.9, 0);
+
+// Floor
+const floorGeo = new THREE.PlaneGeometry(ROOM_W, ROOM_D);
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.set(0, 0, 0);
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Ceiling
+const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), ceilingMat);
+ceiling.rotation.x = Math.PI / 2;
+ceiling.position.set(0, ROOM_H, 0);
+scene.add(ceiling);
+
+// Back wall (Z = -D/2)
+const backWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_H), wallMat);
+backWall.position.set(0, ROOM_H / 2, -ROOM_D / 2);
+backWall.receiveShadow = true;
+scene.add(backWall);
+
+// Front wall (Z = D/2) — this is the "cracked" wall
+// We'll add the crack geometry on this one
+const frontWallGroup = new THREE.Group();
+const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_H), wallMat.clone());
+frontWall.position.set(0, ROOM_H / 2, ROOM_D / 2);
+frontWall.receiveShadow = true;
+frontWallGroup.add(frontWall);
+
+// Add large crack geometry on the front wall
+const crackShape = new THREE.Shape();
+const crackPoints = [
+  { x: -0.8, y: 0.2 }, { x: -0.5, y: 0.5 }, { x: -0.7, y: 0.9 },
+  { x: -0.3, y: 1.3 }, { x: -0.6, y: 1.8 }, { x: -0.2, y: 2.2 },
+  { x: 0.1, y: 2.6 }, { x: 0.4, y: 2.2 }, { x: 0.3, y: 1.8 },
+  { x: 0.6, y: 1.4 }, { x: 0.4, y: 1.0 }, { x: 0.7, y: 0.6 },
+  { x: 0.5, y: 0.2 }, { x: 0.3, y: 0.4 }, { x: 0.1, y: 0.2 },
+  { x: -0.1, y: 0.5 }, { x: -0.3, y: 0.3 }, { x: -0.5, y: 0.1 },
+];
+crackShape.moveTo(crackPoints[0].x, crackPoints[0].y);
+for (let i = 1; i < crackPoints.length; i++) {
+  crackShape.lineTo(crackPoints[i].x, crackPoints[i].y);
+}
+crackShape.closePath();
+
+// Inner crack (void)
+const crackHole = new THREE.Path();
+crackHole.moveTo(-0.2, 0.3);
+crackHole.lineTo(-0.1, 1.2);
+crackHole.lineTo(0.15, 1.5);
+crackHole.lineTo(0.25, 0.9);
+crackHole.lineTo(0.05, 0.5);
+crackHole.closePath();
+crackShape.holes.push(crackHole);
+
+const crackGeo = new THREE.ShapeGeometry(crackShape);
+// Position crack on the wall surface
+const crackMesh = new THREE.Mesh(crackGeo, new THREE.MeshStandardMaterial({
+  color: 0x0c0c0a,
+  roughness: 1,
+  metalness: 0,
+  side: THREE.DoubleSide,
+}));
+crackMesh.position.set(0, ROOM_H / 2, ROOM_D / 2 + 0.01);
+frontWallGroup.add(crackMesh);
+
+// Dark debris spill below crack
+const spillMat = new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 1 });
+const spill = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.4), spillMat);
+spill.position.set(0, 0.01, ROOM_D / 2 + 0.01);
+spill.rotation.x = -Math.PI / 2;
+frontWallGroup.add(spill);
+
+scene.add(frontWallGroup);
+
+// Left wall (X = -W/2)
+const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, ROOM_H), wallMat);
+leftWall.rotation.y = Math.PI / 2;
+leftWall.position.set(-ROOM_W / 2, ROOM_H / 2, 0);
+leftWall.receiveShadow = true;
+scene.add(leftWall);
+
+// Right wall (X = W/2) — "broken window" wall with light
+const rightWallMat = wallMat.clone();
+rightWallMat.color.setHex(0x9a9080);
+const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, ROOM_H), rightWallMat);
+rightWall.rotation.y = -Math.PI / 2;
+rightWall.position.set(ROOM_W / 2, ROOM_H / 2, 0);
+rightWall.receiveShadow = true;
+scene.add(rightWall);
+
+// Window opening (gap in right wall — represented by a dark void)
+const windowVoid = new THREE.Mesh(
+  new THREE.PlaneGeometry(1.2, 1.0),
+  new THREE.MeshBasicMaterial({ color: 0x0c0c0a })
+);
+windowVoid.position.set(ROOM_W / 2 + 0.01, ROOM_H / 2 + 0.3, 0.8);
+scene.add(windowVoid);
+
+// ============================================================
+// 5. LIGHTING
+// ============================================================
+const ambient = new THREE.AmbientLight(0x404060, 0.4);
+scene.add(ambient);
+
+// Directional light simulating daylight through broken window
+const sunLight = new THREE.DirectionalLight(0xffeedd, 1.8);
+sunLight.position.set(ROOM_W / 2 + 2, ROOM_H + 1, 0.8);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 1024;
+sunLight.shadow.mapSize.height = 1024;
+const d = 6;
+sunLight.shadow.camera.left = -d;
+sunLight.shadow.camera.right = d;
+sunLight.shadow.camera.top = d;
+sunLight.shadow.camera.bottom = -d;
+sunLight.shadow.camera.near = 1;
+sunLight.shadow.camera.far = 12;
+scene.add(sunLight);
+
+// Warm point light (dusty atmosphere)
+const warmLight = new THREE.PointLight(0xff8844, 0.6, 6);
+warmLight.position.set(-1.5, 2.0, -1);
+scene.add(warmLight);
+
+// Cold fill light
+const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+fillLight.position.set(-2, 1, -2);
+scene.add(fillLight);
+
+// ============================================================
+// 6. TABLE (damaged wooden table)
+// ============================================================
+const tableGroup = new THREE.Group();
+
+// Table top — tilted slightly
+const tableTopGeo = new THREE.BoxGeometry(1.4, 0.08, 0.8);
+const tableMat = new THREE.MeshStandardMaterial({
+  color: 0x6a5040,
+  roughness: 0.9,
+  metalness: 0,
+});
+const tableTop = new THREE.Mesh(tableTopGeo, tableMat);
+tableTop.position.y = 0.78;
+tableTop.rotation.z = 0.04;
+tableTop.rotation.x = -0.03;
+tableTop.castShadow = true;
+tableTop.receiveShadow = true;
+tableGroup.add(tableTop);
+
+// Legs — slightly splayed
+const legMat = new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.95 });
+const legPositions = [[-0.55, -0.35], [-0.55, 0.35], [0.55, -0.35], [0.55, 0.35]];
+legPositions.forEach(([x, z], i) => {
+  const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.06), legMat);
+  leg.position.set(x, 0.35, z);
+  // One leg broken / dislodged
+  if (i === 2) {
+    leg.rotation.x = 0.15;
+    leg.rotation.z = -0.1;
+    leg.position.x += 0.08;
+  }
+  leg.castShadow = true;
+  leg.receiveShadow = true;
+  tableGroup.add(leg);
+});
+
+// Fallen object on table
+const fallenObj = new THREE.Mesh(
+  new THREE.BoxGeometry(0.08, 0.12, 0.06),
+  new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.8 })
+);
+fallenObj.position.set(0.1, 0.85, 0.1);
+fallenObj.rotation.z = 0.2;
+fallenObj.rotation.x = 0.4;
+tableGroup.add(fallenObj);
+
+tableGroup.position.set(0.3, 0, -0.5);
+scene.add(tableGroup);
+
+// ============================================================
+// 7. DEBRIS (bricks, masonry fragments)
+// ============================================================
+const debrisMat = new THREE.MeshStandardMaterial({
+  color: 0x8a7060,
+  roughness: 0.95,
+});
+const debrisMatDark = new THREE.MeshStandardMaterial({
+  color: 0x5a4a40,
+  roughness: 0.95,
+});
+const debrisMatRed = new THREE.MeshStandardMaterial({
+  color: 0x9a5a4a,
+  roughness: 0.9,
+});
+
+const debrisPositions = [
+  { x: -1.2, z: 0.3, s: 0.2 }, { x: -0.8, z: 1.2, s: 0.15 },
+  { x: 0.5, z: 1.5, s: 0.18 }, { x: -1.8, z: -0.8, s: 0.12 },
+  { x: 1.2, z: -1.0, s: 0.16 }, { x: -0.3, z: -1.5, s: 0.14 },
+  { x: 1.5, z: 1.0, s: 0.1 }, { x: -1.5, z: 1.8, s: 0.13 },
+  { x: 0.8, z: -1.8, s: 0.11 }, { x: -1.0, z: -1.8, s: 0.09 },
+  { x: 2.0, z: 0.5, s: 0.15 }, { x: 1.8, z: -0.5, s: 0.12 },
+];
+
+const debrisMeshes = [];
+debrisPositions.forEach((p, i) => {
+  const mat = i % 3 === 0 ? debrisMatRed : (i % 2 === 0 ? debrisMatDark : debrisMat);
+  const geo = new THREE.BoxGeometry(p.s, p.s * (0.4 + Math.random() * 0.3), p.s * (0.5 + Math.random() * 0.3));
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(p.x, p.s * 0.2, p.z);
+  mesh.rotation.set(Math.random() * 0.5 - 0.25, Math.random() * Math.PI, Math.random() * 0.5 - 0.25);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  debrisMeshes.push(mesh);
+});
+
+// A few larger broken concrete chunks near the crack wall
+const chunkMat = new THREE.MeshStandardMaterial({ color: 0x6a5a50, roughness: 0.95 });
+[-0.6, 0.3, 1.1].forEach((zOff, i) => {
+  const s = 0.12 + Math.random() * 0.08;
+  const chunk = new THREE.Mesh(new THREE.DodecahedronGeometry(s), chunkMat);
+  chunk.position.set(-0.3 + i * 0.5, s * 0.3, ROOM_D / 2 - 0.3);
+  chunk.rotation.set(Math.random(), Math.random(), Math.random());
+  chunk.scale.y = 0.5 + Math.random() * 0.3;
+  chunk.castShadow = true;
+  scene.add(chunk);
+  debrisMeshes.push(chunk);
+});
+
+// ============================================================
+// 8. FALLEN PICTURE FRAMES
+// ============================================================
+const frameMat = new THREE.MeshStandardMaterial({ color: 0x8a7a60, roughness: 0.8 });
+const frameGlass = new THREE.MeshStandardMaterial({
+  color: 0x8888aa,
+  transparent: true,
+  opacity: 0.15,
+  roughness: 0.05,
+  metalness: 0.1,
+});
+
+[-1.6, 1.4, -0.2].forEach((x, i) => {
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.03, 0.28), frameMat);
+  frame.position.set(x, 0.04, -1.2 + i * 0.9);
+  frame.rotation.x = Math.random() * 0.3 - 0.15;
+  frame.rotation.z = Math.random() * 0.4 - 0.2;
+  frame.rotation.y = Math.random() * 0.5 - 0.25;
+  frame.receiveShadow = true;
+  scene.add(frame);
+
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.02, 0.22), frameGlass);
+  glass.position.set(x, 0.055, -1.2 + i * 0.9);
+  glass.rotation.copy(frame.rotation);
+  scene.add(glass);
+});
+
+// ============================================================
+// 9. DUST PARTICLES
+// ============================================================
+const particleCount = 600;
+const positions = new Float32Array(particleCount * 3);
+const sizes = new Float32Array(particleCount);
+for (let i = 0; i < particleCount; i++) {
+  positions[i * 3] = (Math.random() - 0.5) * ROOM_W * 1.2;
+  positions[i * 3 + 1] = Math.random() * ROOM_H;
+  positions[i * 3 + 2] = (Math.random() - 0.5) * ROOM_D * 1.2;
+  sizes[i] = 0.008 + Math.random() * 0.015;
+}
+
+const particleGeo = new THREE.BufferGeometry();
+particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+particleGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+const particleMat = new THREE.PointsMaterial({
+  color: 0xaaaabb,
+  size: 0.015,
+  transparent: true,
+  opacity: 0.3,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+const particles = new THREE.Points(particleGeo, particleMat);
+particles.position.y = 0;
+scene.add(particles);
+
+// ============================================================
+// 10. HOTSPOTS (interactive markers)
+// ============================================================
+const hotspots = [];
+
+function createHotspot(pos, label, color = 0xC0392B) {
+  const group = new THREE.Group();
+
+  // Pulsing sphere
+  const sphereMat = new THREE.MeshStandardMaterial({
+    color: color,
+    emissive: color,
+    emissiveIntensity: 0.6,
+    roughness: 0.2,
+    metalness: 0.1,
+  });
+  const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), sphereMat);
+  group.add(sphere);
+
+  // Glow ring
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.3,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.14, 24), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = -0.02;
+  group.add(ring);
+
+  group.position.copy(pos);
+  scene.add(group);
+
+  // HTML label
+  const labelEl = document.createElement('div');
+  labelEl.className = 'hotspot-label';
+  labelEl.textContent = label;
+  labelEl.style.opacity = '0';
+  labelsContainer.appendChild(labelEl);
+
+  const hotspot = {
+    group,
+    sphere,
+    ring,
+    ringMat,
+    labelEl,
+    label,
+    pos: pos.clone(),
+    phase: Math.random() * Math.PI * 2,
+    active: false,
+  };
+
+  hotspots.push(hotspot);
+  return hotspot;
+}
+
+// HS1 — The Crack (on the front wall)
+createHotspot(
+  new THREE.Vector3(-0.1, ROOM_H / 2 + 0.2, ROOM_D / 2 + 0.15),
+  '✦ La Frattura'
+);
+
+// HS2 — The Brick (on a debris pile)
+createHotspot(
+  new THREE.Vector3(-0.8, 0.15, 1.2),
+  '✦ Il Mattone'
+);
+
+// HS3 — The Table (on/near the table)
+createHotspot(
+  new THREE.Vector3(0.3, 0.9, -0.5),
+  '✦ Il Tavolo'
+);
+
+// ============================================================
+// 11. POPUP CONTENT
+// ============================================================
+const popupData = [
+  {
+    title: 'La Frattura',
+    subtitle: 'Il muro che si è aperto',
+    content: `
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1581091215367-bed4b1a0e3b9?w=600&q=80" alt="Cracked wall after earthquake" loading="lazy">
+      </div>
+      <p>Le pareti in muratura, quando sottoposte a stress sismico, sviluppano <strong>fratture diagonali</strong> che seguono i giunti tra i mattoni. Questo pattern a "X" o a "scala" è il segno più evidente del danno strutturale causato dal terremoto.</p>
+      <p>La frattura che vedi in questa stanza è ispirata a quelle documentate ad Amatrice dopo il sisma del 24 agosto 2016. Le crepe non sono solo danni estetici: quando attraversano l'intero spessore del muro, compromettono la capacità portante dell'edificio.</p>
+      <div class="media">
+        <iframe src="https://www.youtube.com/embed/7rycCRtcfHs" allowfullscreen loading="lazy"></iframe>
+      </div>
+      <p style="font-size:11px;color:#5a5a54">INGV — Shakemovie della propagazione delle onde sismiche del terremoto Mw 6.5 del 30 ottobre 2016.</p>
+      <span class="source">Fonte: INGV, Protezione Civile Nazionale</span>
+    `
+  },
+  {
+    title: 'Il Mattone',
+    subtitle: 'Ciò che resta',
+    content: `
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1545048702-79362596a1e5?w=600&q=80" alt="Collapsed bricks and rubble" loading="lazy">
+      </div>
+      <p>I mattoni che vedi sparsi sul pavimento raccontano la storia di interi paesi cancellati in pochi secondi. Il sisma del <strong>24 agosto 2016</strong> (Mw 6.0, ore 03:36 UTC) ha distrutto il 70% del patrimonio edilizio di Amatrice, Accumoli e Arquata del Tronto.</p>
+
+      <div class="data-grid">
+        <span class="d-label">Magnitudo</span>
+        <span class="d-value">6.0 Mw</span>
+        <span class="d-label">Epicentro</span>
+        <span class="d-value">Accumoli (RI)</span>
+        <span class="d-label">Profondità</span>
+        <span class="d-value">~4 km</span>
+        <span class="d-label">Ora (UTC)</span>
+        <span class="d-value">03:36:32</span>
+        <span class="d-label">Vittime</span>
+        <span class="d-value">299</span>
+        <span class="d-label">Sfollati</span>
+        <span class="d-value">&gt; 4.000</span>
+      </div>
+
+      <p>La sequenza sismica ha prodotto oltre <strong>100.000 eventi</strong> in due anni, con 8 scosse di magnitudo ≥ 5.0.</p>
+      <p><a href="https://www.ingv.it/" target="_blank">→ Istituto Nazionale di Geofisica e Vulcanologia</a></p>
+      <span class="source">Fonte: INGV — Catalogo Parametrico dei Terremoti Italiani</span>
+    `
+  },
+  {
+    title: 'Il Tavolo',
+    subtitle: 'La vita interrotta',
+    content: `
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=600&q=80" alt="Domestic interior damage" loading="lazy">
+      </div>
+      <p>«<em>È stato come se una mano gigante avesse afferrato la nostra casa e l'avesse scossa. In pochi secondi, ciò che avevamo costruito in una vita era ridotto in macerie.</em>»</p>
+      <p style="font-size:11px;color:#5a5a54">— Testimonianza di un sopravvissuto di Amatrice, agosto 2016</p>
+      <p>Oltre 40.000 edifici hanno subito danni nella sola regione Marche. La scossa più potente non fu però quella di agosto: il <strong>30 ottobre 2016</strong> un sisma di Mw 6.5 colpì Norcia, l'evento più forte nella sequenza sismica iniziata ad agosto.</p>
+
+      <div class="data-grid">
+        <span class="d-label">Magnitudo</span>
+        <span class="d-value">6.5 Mw</span>
+        <span class="d-label">Epicentro</span>
+        <span class="d-value">Norcia (PG)</span>
+        <span class="d-label">Profondità</span>
+        <span class="d-value">~10 km</span>
+        <span class="d-label">Data</span>
+        <span class="d-value">30 ottobre 2016</span>
+        <span class="d-label">Ora (UTC)</span>
+        <span class="d-value">06:40:17</span>
+      </div>
+
+      <p>Furono danneggiate la <strong>Basilica di San Benedetto</strong> a Norcia e numerosi altri beni culturali di valore inestimabile. Il patrimonio storico e artistico del Centro Italia ha subito perdite incalcolabili.</p>
+      <p><a href="https://www.ingv.it/" target="_blank">→ Istituto Nazionale di Geofisica e Vulcanologia</a></p>
+      <span class="source">Fonte: INGV, MiBAC — Ufficio Ricostruzione</span>
+    `
+  },
+];
+
+// ============================================================
+// 12. INTERACTION SYSTEM
+// ============================================================
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let selectedHotspot = null;
+let isAnimating = false;
+
+// Camera fly-to state
+const flyState = {
+  active: false,
+  startPos: new THREE.Vector3(),
+  endPos: new THREE.Vector3(),
+  startTarget: new THREE.Vector3(),
+  endTarget: new THREE.Vector3(),
+  progress: 0,
+  duration: 1.0,
+  callback: null,
+};
+
+function flyTo(pos, target, callback) {
+  flyState.active = true;
+  flyState.startPos.copy(camera.position);
+  flyState.endPos.copy(pos);
+  flyState.startTarget.copy(controls.target);
+  flyState.endTarget.copy(target);
+  flyState.progress = 0;
+  flyState.callback = callback || null;
+  isAnimating = true;
+  controls.enabled = false; // Disable controls during animation
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function getHotspotHit(hits) {
+  for (const hit of hits) {
+    for (const hs of hotspots) {
+      if (hit.object === hs.sphere || hit.object.parent === hs.group) {
+        return hs;
+      }
+    }
+  }
+  return null;
+}
+
+// --- Mouse events ---
+let isDragging = false, dragStart = { x: 0, y: 0 };
+
+canvas.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  dragStart.x = e.clientX;
+  dragStart.y = e.clientY;
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  const dx = e.clientX - dragStart.x;
+  const dy = e.clientY - dragStart.y;
+  if (Math.abs(dx) < 5 && Math.abs(dy) < 5) {
+    // It was a click, not a drag
+    handleClick(e);
+  }
+  isDragging = false;
+});
+
+canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+function handleClick(e) {
+  if (isAnimating) return;
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const meshes = hotspots.map(h => h.sphere);
+  const intersects = raycaster.intersectObjects(meshes);
+  if (intersects.length > 0) {
+    const hit = getHotspotHit(intersects);
+    if (hit) onHotspotClick(hotspots.indexOf(hit));
+  }
+}
+
+// --- Touch events ---
+let touchId = null, touchStartPos = { x: 0, y: 0 };
+
+canvas.addEventListener('touchstart', (e) => {
+  const t = e.changedTouches[0];
+  if (!t) return;
+  touchId = t.identifier;
+  touchStartPos.x = t.clientX;
+  touchStartPos.y = t.clientY;
+}, { passive: true });
+
+canvas.addEventListener('touchmove', (e) => {
+  // OrbitControls handles touch orbit automatically
+}, { passive: true });
+
+canvas.addEventListener('touchend', (e) => {
+  const t = Array.from(e.changedTouches).find(tc => tc.identifier === touchId) || e.changedTouches[0];
+  if (t) {
+    const dist = Math.hypot(t.clientX - touchStartPos.x, t.clientY - touchStartPos.y);
+    if (dist < 10) {
+      // Tap detected
+      const rect = canvas.getBoundingClientRect();
+      mouse.x = ((t.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((t.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const meshes = hotspots.map(h => h.sphere);
+      const intersects = raycaster.intersectObjects(meshes);
+      if (intersects.length > 0) {
+        const hit = getHotspotHit(intersects);
+        if (hit) onHotspotClick(hotspots.indexOf(hit));
+      }
+    }
+  }
+  touchId = null;
+});
+
+// --- Click handler per hotspot ---
+const flyPositions = [
+  { pos: new THREE.Vector3(-0.8, 1.6, 2.8), target: new THREE.Vector3(-0.1, 1.8, ROOM_D / 2) },
+  { pos: new THREE.Vector3(-1.5, 0.8, 3.2), target: new THREE.Vector3(-0.8, 0.3, 1.2) },
+  { pos: new THREE.Vector3(-0.5, 1.2, 3.5), target: new THREE.Vector3(0.3, 0.8, -0.5) },
+];
+
+function onHotspotClick(index) {
+  if (index < 0 || index >= flyPositions.length) return;
+  const fp = flyPositions[index];
+  flyTo(fp.pos, fp.target, () => {
+    showPopup(index);
+  });
+}
+
+// ============================================================
+// 13. POPUP SYSTEM
+// ============================================================
+function showPopup(index) {
+  const data = popupData[index];
+  if (!data) return;
+  popupContent.innerHTML = `
+    <h2>${data.subtitle}</h2>
+    <h1>${data.title}</h1>
+    ${data.content}
+  `;
+  popupOverlay.classList.add('visible');
+}
+
+function hidePopup() {
+  popupOverlay.classList.remove('visible');
+  setTimeout(() => {
+    if (!popupOverlay.classList.contains('visible')) {
+      popupContent.innerHTML = '';
+    }
+  }, 350);
+}
+
+document.getElementById('popup-close').addEventListener('click', hidePopup);
+popupOverlay.addEventListener('click', (e) => {
+  if (e.target === popupOverlay) hidePopup();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hidePopup();
+});
+
+// ============================================================
+// 14. UPDATE LOOP
+// ============================================================
+const clock = new THREE.Clock();
+
+function updateHotspots(time) {
+  hotspots.forEach((hs, i) => {
+    // Pulsing animation
+    const pulse = 0.8 + 0.3 * Math.sin(time * 2.5 + hs.phase);
+    hs.sphere.scale.setScalar(pulse);
+    hs.ring.scale.setScalar(pulse);
+    hs.ringMat.opacity = 0.15 + 0.2 * Math.sin(time * 2.5 + hs.phase + 1);
+
+    // Project 3D position to screen for label
+    const vec = hs.pos.clone();
+    vec.project(camera);
+
+    // Check if behind camera
+    if (vec.z < 1) {
+      const x = (vec.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-vec.y * 0.5 + 0.5) * window.innerHeight;
+      hs.labelEl.style.left = x + 'px';
+      hs.labelEl.style.top = y + 'px';
+
+      // Fade label based on distance
+      const dist = camera.position.distanceTo(hs.pos);
+      const opacity = Math.max(0, Math.min(1, 1 - (dist - 0.5) / 4));
+      hs.labelEl.style.opacity = opacity > 0.1 ? String(opacity) : '0';
+    } else {
+      hs.labelEl.style.opacity = '0';
+    }
+  });
+}
+
+function updateFly(delta) {
+  if (!flyState.active) return;
+
+  flyState.progress += delta / flyState.duration;
+  const t = Math.min(easeInOutCubic(flyState.progress), 1);
+
+  camera.position.lerpVectors(flyState.startPos, flyState.endPos, t);
+  controls.target.lerpVectors(flyState.startTarget, flyState.endTarget, t);
+
+  if (t >= 1) {
+    flyState.active = false;
+    isAnimating = false;
+    controls.enabled = true; // Re-enable controls
+    if (flyState.callback) {
+      flyState.callback();
+    }
+  }
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  const time = clock.getElapsedTime();
+
+  // Dust particles drift
+  const pos = particles.geometry.attributes.position.array;
+  for (let i = 0; i < particleCount; i++) {
+    pos[i * 3 + 1] += delta * 0.02;
+    if (pos[i * 3 + 1] > ROOM_H) pos[i * 3 + 1] = 0;
+  }
+  particles.geometry.attributes.position.needsUpdate = true;
+
+  updateHotspots(time);
+  updateFly(delta);
+  controls.update();
+
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+// 15. RESIZE HANDLER
+// ============================================================
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+// ============================================================
+// 16. START
+// ============================================================
+animate();
+
+// Mark loading as done (procedural textures load instantly)
+// If textures need loading, the LoadingManager handles it.
+// Give a small delay so the loading screen is visible briefly.
+setTimeout(() => {
+  loadBar.style.width = '100%';
+  setTimeout(() => loadingScreen.classList.add('hidden'), 300);
+}, 600);
+
+console.log('SISMA 2016 — Room 3D Installation loaded successfully');
+</script>
+</body>
+</html>
