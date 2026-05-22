@@ -36,8 +36,15 @@ nav div{display:flex;align-items:center;gap:12px}
 <div id="hint">Clicca il punto rosso · Muovi il mouse per esplorare</div>
 <div id="cursor-dot"></div>
 
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-<script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
 // ================================================================
 // Config
 // ================================================================

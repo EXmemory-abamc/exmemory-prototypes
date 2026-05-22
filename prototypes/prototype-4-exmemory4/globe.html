@@ -37,8 +37,15 @@ nav div{display:flex;align-items:center;gap:12px}
   <div style="font-size:9px;font-weight:500;letter-spacing:.2em;text-transform:uppercase;color:var(--mid)">Caricamento globo</div>
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-<script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
 const canvas=document.getElementById('canvas');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,logarithmicDepthBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));

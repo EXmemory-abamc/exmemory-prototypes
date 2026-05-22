@@ -51,8 +51,15 @@ nav div{display:flex;align-items:center;gap:12px}
 </div>
 <div id="hint">Clicca il punto rosso · Trascina per ruotare · Scorri per zoomare</div>
 <div id="cursor-dot"></div>
-<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
-<script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
 const canvas=document.getElementById('canvas');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,logarithmicDepthBuffer:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
