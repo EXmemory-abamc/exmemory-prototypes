@@ -16,7 +16,7 @@
 <script>
   // Tailwind Configuration to match reference/tailwind.config.js
   tailwind.config = {
-    darkMode: 'class',
+    darkMode: ['class', '.light'],
     theme: {
       extend: {
         colors: {
@@ -309,14 +309,14 @@
 // ================================================================
 // Theme Toggle & Cache Management
 // ================================================================
-const dm = localStorage.getItem('exm_theme');
+const dm = localStorage.getItem('exm_theme_v6');
 if (dm === '0') {
   document.documentElement.classList.add('light');
 }
 
 function toggleTheme() {
   const isLight = document.documentElement.classList.toggle('light');
-  localStorage.setItem('exm_theme', isLight ? '0' : '1');
+  localStorage.setItem('exm_theme_v6', isLight ? '0' : '1');
   if (window.bgRenderer) {
     window.bgRenderer.setClearColor(isLight ? 0xf8f8f5 : 0x050505);
   }
