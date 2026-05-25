@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amatrice — EXmemory v6.0</title>
+
+<!-- Tailwind CSS Play CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Google Fonts: Inter & IBM Plex Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          void: { DEFAULT: '#050505', deep: '#020202', card: 'rgba(20, 20, 20, 0.6)' },
+          reality: { fisico: '#4ADE80', percettivo: '#FBBF24', interpretativo: '#60A5FA' },
+          emotion: { fear: '#E15B5B', confusion: '#E29B43', hope: '#59B185', sadness: '#5487D3', anger: '#9F75E3' },
+        },
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+          mono: ['IBM Plex Mono', 'monospace'],
+        },
+        letterSpacing: { cinematic: '0.25em' },
+        borderWidth: { 'hairline': '0.5px' },
+        boxShadow: {
+          'glow-green': '0 0 15px rgba(74, 222, 128, 0.4)',
+          'glow-amber': '0 0 15px rgba(251, 191, 36, 0.4)',
+          'glow-blue': '0 0 15px rgba(96, 165, 250, 0.4)',
+        }
+      },
+    }
+  }
+</script>
+
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background-color: #050505;
+    color: #e5e7eb;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+  }
+
+  #canvas { display:block; position:fixed; inset:0; width:100%; height:100%; }
+
+  .hud-panel {
+    background: rgba(10, 10, 10, 0.75);
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    border: 0.5px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7);
+  }
+
+  #fade-in {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #050505;
+    animation: fadeOut .8s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes fadeOut { 0%{opacity:1} 100%{opacity:0} }
+
+  #cursor-dot {
+    position: fixed;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid #FBBF24;
+    background: transparent;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    transition: opacity .2s, width .15s, height .15s;
+  }
+  #cursor-dot.hover {
+    width: 22px; height: 22px;
+    background: rgba(251, 191, 36, 0.1);
+  }
+
+  /* Toggle buttons */
+  #city-toggle {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 22;
+    display: flex;
+    gap: 4px;
+    pointer-events: all;
+  }
+  .ui-btn {
+    background: rgba(10, 10, 10, 0.75);
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.4);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ui-btn:hover { color: rgba(255, 255, 255, 0.8); border-color: rgba(255,255,255,0.25); }
+  .active-btn {
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.4);
+    color: #FBBF24;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.15);
+  }
+
+  #hint {
+    position: fixed;
+    bottom: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.25);
+    z-index: 20;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .anim-slide-left  { animation: slideInLeft  0.8s ease 0.3s both; }
+  .anim-slide-right { animation: slideInRight 0.8s ease 0.4s both; }
+</style>
+</head>
+<body>
+<div id="fade-in"></div>
+<canvas id="canvas"></canvas>
+<!-- TOP HEADER -->
+<div class="fixed top-0 left-0 right-0 z-20 pointer-events-none flex justify-between items-start px-9 pt-7">
+  <div class="flex flex-col gap-2 pointer-events-auto anim-slide-left">
+    <a href="country.html" class="text-[10px] font-mono tracking-wider text-gray-500 hover:text-reality-percettivo transition-colors uppercase">← Italy</a>
+    <h2 class="text-[13px] font-semibold tracking-cinematic text-white uppercase font-sans">
+      <span class="text-gray-500 font-mono mr-2">04</span>AMATRICE
+    </h2>
+  </div>
+  <div class="flex items-center gap-3 pointer-events-auto anim-slide-right">
+    <svg width="20" height="20" viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="45" fill="none" stroke="#FBBF24" stroke-width="4"/>
+      <circle cx="50" cy="50" r="18" fill="none" stroke="#FBBF24" stroke-width="3"/>
+      <line x1="50" y1="5" x2="50" y2="95" stroke="#FBBF24" stroke-width="2" opacity=".4"/>
+      <line x1="5" y1="50" x2="95" y2="50" stroke="#FBBF24" stroke-width="2" opacity=".4"/>
+    </svg>
+    <span class="text-[11px] font-semibold tracking-[0.22em] text-white">EXmemory</span>
+    <span class="text-[8px] font-mono tracking-[0.18em] text-gray-500">IMMERSIVE COLLECTIVE MEMORY</span>
+  </div>
+</div>
+<div id="city-toggle">
+  <button class="ui-btn active-btn" id="pre-btn">Pre 2016</button>
+  <button class="ui-btn" id="post-btn">Post 24 Ago</button>
+</div>
+<div id="hint">Clicca un edificio rosso · Muovi il mouse per esplorare</div>
+<div id="cursor-dot"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.158.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+// ================================================================
+// Config
+// ================================================================
+const EXMEMORY_MARKERS = [
+  { x: -2, z: 2, roomIdx: 0, label: 'Casa di Marco' },
+  { x: 3, z: -1, roomIdx: 1, label: 'Casa di Luca' },
+  { x: -3.5, z: -2, roomIdx: 2, label: 'Casa di Anna' },
+  { x: 0, z: -3, roomIdx: 0, label: 'Casa di Marco' },
+  { x: 4, z: 3, roomIdx: 1, label: 'Casa di Luca' },
+  { x: -1.5, z: 3.5, roomIdx: 2, label: 'Casa di Anna' }
+];
+
+let cityState = 'pre';
+const darkMode = true;
+
+// ================================================================
+// Three.js setup
+// ================================================================
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x0c0c0a);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 1000);
+const raycaster = new THREE.Raycaster();
+
+// Camera orbit
+let theta = 0.8, phi = 0.35, radius = 14;
+let targetTheta = theta, targetPhi = phi;
+let centerTheta = theta, centerPhi = phi;
+let mouseX = 0, mouseY = 0;
+let isDragging = false, dragStartX = 0, dragStartY = 0, dragStartTheta = 0, dragStartPhi = 0;
+
+function updateCamera() {
+  camera.position.x = radius * Math.sin(theta) * Math.cos(phi);
+  camera.position.y = radius * Math.sin(phi);
+  camera.position.z = radius * Math.cos(theta) * Math.cos(phi);
+  camera.lookAt(0, 0, 0);
+}
+updateCamera();
+
+// ================================================================
+// Lights
+// ================================================================
+function setupLights() {
+  const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambient);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(10, 20, 10);
+  scene.add(dir);
+  const hemi = new THREE.HemisphereLight(0x87CEEB, 0x3a3a3a, 0.4);
+  scene.add(hemi);
+}
+
+// ================================================================
+// Ground
+// ================================================================
+const loader = new THREE.TextureLoader();
+let groundMesh = null;
+
+function loadTextureSafe(url, fallback, onLoad) {
+  const fc = document.createElement('canvas'); fc.width = 1; fc.height = 1;
+  const fctx = fc.getContext('2d'); fctx.fillStyle = fallback; fctx.fillRect(0, 0, 1, 1);
+  const tex = loader.load(url, onLoad, undefined, () => { tex.image = fc; tex.needsUpdate = true; if (onLoad) onLoad(); });
+  return tex;
+}
+
+function buildGround() {
+  if (groundMesh) { scene.remove(groundMesh); groundMesh.geometry.dispose(); groundMesh.material.dispose(); }
+  const gndTex = loadTextureSafe(cityState === 'pre' ? 'uploads/2A.jpg' : 'uploads/2B.jpg', '#6a7a50', null);
+  gndTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const mat = new THREE.MeshStandardMaterial({ map: gndTex, roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  const geo = new THREE.PlaneGeometry(28, 28);
+  groundMesh = new THREE.Mesh(geo, mat);
+  groundMesh.rotation.x = -Math.PI / 2;
+  groundMesh.position.y = -0.005;
+  scene.add(groundMesh);
+}
+
+// ================================================================
+// Buildings — EXmemory_4 style row system with pre/post destruction
+// ================================================================
+const sceneObjs = [];
+
+function buildBuildings() {
+  const post = cityState === 'post';
+  const terra = [0xb05838, 0xc06848, 0xa84e30, 0xb86040, 0xc87050, 0xd08060];
+  const stoneWall = [0xc8b898, 0xb8a888, 0xd0c0a0, 0xc0b090];
+  const rubble = [0xe8e4dc, 0xd8d4cc, 0xf0ece4, 0xdad6ce];
+
+  // Green surroundings (pre only)
+  if (!post) {
+    const greenMat = new THREE.MeshStandardMaterial({ color: darkMode ? 0x1e2a12 : 0x6a8a40, roughness: 1 });
+    const darkGreen = new THREE.MeshStandardMaterial({ color: darkMode ? 0x16200e : 0x4a6828, roughness: 1 });
+    [
+      [-9, -5, 5, 6], [-8, 6, 4, 5], [7, -6, 5, 5], [8, 5, 4, 6],
+      [-3, -9, 6, 3], [4, -8, 5, 3], [-2, 9, 5, 3], [5, 8, 6, 3]
+    ].forEach(([x, z, w, d]) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), Math.random() > 0.5 ? greenMat : darkGreen);
+      m.rotation.x = -Math.PI / 2; m.position.set(x, 0.001, z);
+      scene.add(m); sceneObjs.push(m);
+    });
+  }
+
+  // Roads
+  const roadCol = darkMode ? 0x2a2826 : 0xb8b2a8;
+  const roadMat = new THREE.MeshStandardMaterial({ color: roadCol, roughness: 1 });
+  const road = (w, d, px, pz, ry = 0) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), roadMat);
+    m.rotation.x = -Math.PI / 2; m.rotation.z = ry;
+    m.position.set(px, 0.003, pz);
+    scene.add(m); sceneObjs.push(m);
+  };
+  road(18, 1.0, 0, 0); road(1.0, 14, 0, 0);
+  road(16, 0.8, 0, 3.8); road(16, 0.8, 0, -3.8);
+  road(0.8, 10, 7.5, 0); road(0.8, 10, -7.5, 0);
+  [-5, -2.5, 0, 2.5, 5].forEach(x => road(0.7, 10, x, 0));
+  [-2, -1, 0, 1, 2].forEach(z => road(18, 0.65, 0, z));
+
+  // Building group with slight rotation
+  const tGroup = new THREE.Group();
+  tGroup.rotation.y = 0.22;
+  scene.add(tGroup); sceneObjs.push(tGroup);
+
+  // Row buildings
+  const rowDefs = [
+    [-3.0, -3.5, 3.5, 6, 0.85], [-2.15, -5.0, 5.0, 9, 0.82],
+    [-1.35, -6.0, 6.0, 11, 0.80], [-0.55, -6.5, 6.5, 12, 0.80],
+    [0.25, -6.5, 6.5, 12, 0.80], [1.05, -6.0, 6.0, 11, 0.80],
+    [1.85, -5.0, 5.0, 9, 0.82], [2.65, -3.5, 3.5, 6, 0.85],
+  ];
+  rowDefs.forEach(([zc, xs, xe, n, depth]) => {
+    const segW = (xe - xs) / n;
+    for (let i = 0; i < n; i++) {
+      const x = xs + (i + 0.5) * segW;
+      const distFromCenter = Math.sqrt(x * x + zc * zc);
+      const baseH = 3.0 - distFromCenter * 0.15 + Math.sin(x * 1.1 + zc * 0.9) * 0.5 + Math.random() * 0.4;
+      const h = Math.max(0.8, baseH);
+      const destroyed = post && distFromCenter < 3.8 && Math.random() > 0.25;
+      const partiallyDamaged = post && distFromCenter < 5 && !destroyed && Math.random() > 0.5;
+      const actualH = destroyed ? (0.1 + Math.random() * 0.3) : partiallyDamaged ? h * 0.45 : h;
+      let col;
+      if (destroyed) col = rubble[Math.floor(Math.random() * rubble.length)];
+      else if (partiallyDamaged) col = darkMode ? 0x2a2624 : 0xd0c8bc;
+      else col = darkMode ? 0x2e2824 : stoneWall[Math.floor(Math.random() * stoneWall.length)];
+      const geo = new THREE.BoxGeometry(segW * 0.92, actualH, depth);
+      const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.9 });
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, actualH / 2, zc);
+      if (partiallyDamaged && post) { m.rotation.z = (Math.random() - 0.5) * 0.15; m.rotation.x = (Math.random() - 0.5) * 0.06; }
+      tGroup.add(m); sceneObjs.push(m);
+      if (!destroyed) {
+        const roofCol = post && partiallyDamaged ? (darkMode ? 0x302820 : 0xb8a898) : terra[Math.floor(Math.random() * terra.length)];
+        const rh = 0.12 + Math.random() * 0.08;
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(segW * 0.96, rh, depth + 0.05),
+          new THREE.MeshStandardMaterial({ color: roofCol, roughness: 0.85 }));
+        roof.position.set(x, actualH + rh / 2, zc);
+        tGroup.add(roof); sceneObjs.push(roof);
+      }
+      if (destroyed && post) {
+        for (let r = 0; r < 4; r++) {
+          const s = 0.15 + Math.random() * 0.3;
+          const rb = new THREE.Mesh(new THREE.BoxGeometry(s, s * 0.25, s * 0.8),
+            new THREE.MeshStandardMaterial({ color: rubble[Math.floor(Math.random() * rubble.length)], roughness: 1 }));
+          rb.position.set(x + (Math.random() - 0.5) * segW * 1.5, 0.12 + s * 0.12, zc + (Math.random() - 0.5) * depth * 1.5);
+          rb.rotation.y = Math.random() * Math.PI;
+          tGroup.add(rb); sceneObjs.push(rb);
+        }
+      }
+    }
+  });
+
+  // Perimeter buildings
+  const periph = [
+    [-8, -2, 1.4, 1.2, 2.2, false], [-8, 1.5, 1.2, 1.0, 2.0, false],
+    [8, -1.5, 2.0, 1.5, 3.5, false], [8, 2, 1.5, 1.2, 2.8, false],
+    [0, -6, 3.0, 2.0, 2.5, false], [-2, 6.5, 2.5, 1.5, 2.8, false],
+    [3, 6, 2.0, 1.8, 2.2, false], [-6, -5.5, 1.8, 1.4, 1.8, false],
+    [5.5, -5, 1.5, 1.2, 2.0, false],
+  ];
+  periph.forEach(([x, z, w, d, h, isRed]) => {
+    const destroyedP = post && !isRed && Math.abs(x) < 6 && Math.abs(z) < 6 && Math.random() > 0.5;
+    const actualH2 = destroyedP ? 0.2 : h;
+    const col = isRed ? 0xC0392B : destroyedP ? (darkMode ? 0x282420 : 0xd8d4cc) : (darkMode ? 0x2e2824 : stoneWall[0]);
+    const geo = new THREE.BoxGeometry(w, actualH2, d);
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.9, emissive: isRed ? 0xC0392B : 0, emissiveIntensity: isRed ? 0.25 : 0 });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, actualH2 / 2, z);
+    scene.add(m); sceneObjs.push(m);
+    if (!isRed && !destroyedP) {
+      const roofCol = terra[Math.floor(Math.random() * terra.length)];
+      const roof2 = new THREE.Mesh(new THREE.BoxGeometry(w + 0.06, 0.12, d + 0.06),
+        new THREE.MeshStandardMaterial({ color: roofCol, roughness: 0.85 }));
+      roof2.position.set(x, actualH2 + 0.06, z);
+      scene.add(roof2); sceneObjs.push(roof2);
+    }
+  });
+
+  // Church tower
+  const towerH = post ? (Math.random() > 0.4 ? 1.5 : 0.2) : 6.5;
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(0.8, towerH, 0.8),
+    new THREE.MeshStandardMaterial({ color: darkMode ? 0x302c28 : 0xc8c0b0, roughness: 0.9 }));
+  tower.position.set(-1, towerH / 2, -2.8);
+  tGroup.add(tower); sceneObjs.push(tower);
+  if (!post) {
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0),
+      new THREE.MeshStandardMaterial({ color: darkMode ? 0x3a3028 : 0xa05030, roughness: 0.85 }));
+    cap.position.set(-1, towerH + 0.2, -2.8);
+    tGroup.add(cap); sceneObjs.push(cap);
+  }
+
+  // Post: rubble field on ground
+  if (post) {
+    const rg = new THREE.Mesh(new THREE.PlaneGeometry(13, 7.5),
+      new THREE.MeshStandardMaterial({ color: darkMode ? 0x2a2824 : 0xe0dcd4, roughness: 1 }));
+    rg.rotation.x = -Math.PI / 2; rg.rotation.z = 0.22;
+    rg.position.set(0, 0.001, 0);
+    scene.add(rg); sceneObjs.push(rg);
+  }
+}
+
+// ================================================================
+// Marker buildings — clickable hotspots linking to rooms
+// ================================================================
+const hotspotMeshes = [];
+const pulseObjs = [];
+const markerMat = new THREE.MeshStandardMaterial({ color: 0xC0392B, emissive: 0xC0392B, emissiveIntensity: 0.3 });
+
+function buildMarkers() {
+  EXMEMORY_MARKERS.forEach((m, i) => {
+    // Red box marker
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.6), markerMat);
+    box.position.set(m.x, 0.4, m.z);
+    box.userData = { type: 'marker', roomIdx: m.roomIdx, label: m.label, index: i };
+    scene.add(box);
+    hotspotMeshes.push(box);
+
+    // Pulse ring
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xC0392B, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.5, 32), ringMat);
+    ring.position.set(m.x, 0.05, m.z);
+    ring.rotation.x = Math.PI / 2;
+    scene.add(ring);
+    pulseObjs.push({ mesh: ring });
+  });
+}
+
+// ================================================================
+// Scene builder
+// ================================================================
+function buildScene() {
+  // Clear
+  while (scene.children.length) scene.remove(scene.children[0]);
+  hotspotMeshes.length = 0;
+  pulseObjs.length = 0;
+  groundMesh = null;
+
+  setupLights();
+  buildGround();
+  buildBuildings();
+  buildMarkers();
+
+  updateCamera();
+}
+
+
+
+// ================================================================
+// Controls — Parallax orbiting (mouse hover without drag)
+// ================================================================
+canvas.addEventListener('mousemove', e => {
+  const ndcX = (e.clientX / innerWidth) * 2 - 1;
+  const ndcY = -(e.clientY / innerHeight) * 2 + 1;
+
+  if (isDragging) {
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    theta = dragStartTheta - dx * 0.005;
+    phi = Math.max(-0.2, Math.min(1.2, dragStartPhi + dy * 0.004));
+    updateCamera();
+  }
+
+  // Parallax — subtle camera orbit based on mouse position (only when not dragging)
+  if (!isDragging) {
+    targetTheta = centerTheta + ndcX * 0.4;
+    targetPhi = centerPhi - ndcY * 0.15;
+    targetPhi = Math.max(-0.2, Math.min(1.2, targetPhi));
+  }
+
+  // Cursor dot — hover detection
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+canvas.addEventListener('mousedown', e => {
+  isDragging = true;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  dragStartTheta = theta;
+  dragStartPhi = phi;
+});
+canvas.addEventListener('mouseup', () => { isDragging = false; targetTheta = theta; targetPhi = phi; centerTheta = theta; centerPhi = phi; });
+canvas.addEventListener('mouseleave', () => { isDragging = false; targetTheta = theta; targetPhi = phi; centerTheta = theta; centerPhi = phi; });
+
+// Wheel zoom
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  radius = Math.max(5, Math.min(40, radius + e.deltaY * 0.02));
+}, { passive: false });
+
+// Click — marker detection (skip if drag > 5px)
+canvas.addEventListener('click', e => {
+  if (animating) return;
+  const dx = e.clientX - dragStartX;
+  const dy = e.clientY - dragStartY;
+  if (Math.sqrt(dx * dx + dy * dy) > 5) return;
+  const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(hotspotMeshes);
+  if (!hits.length) return;
+  const obj = hits[0].object;
+  if (obj.userData && obj.userData.type === 'marker') {
+    window.location.href = 'room.html?id=' + obj.userData.roomIdx;
+  }
+});
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ================================================================
+// Pre/Post toggle
+// ================================================================
+document.getElementById('pre-btn').onclick = () => {
+  cityState = 'pre';
+  document.getElementById('pre-btn').classList.add('active-btn');
+  document.getElementById('post-btn').classList.remove('active-btn');
+  buildScene();
+};
+document.getElementById('post-btn').onclick = () => {
+  cityState = 'post';
+  document.getElementById('post-btn').classList.add('active-btn');
+  document.getElementById('pre-btn').classList.remove('active-btn');
+  buildScene();
+};
+
+// ================================================================
+// Animation
+// ================================================================
+let animating = false;
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Parallax — smooth interpolation
+  if (!isDragging) {
+    theta += (targetTheta - theta) * 0.03;
+    phi += (targetPhi - phi) * 0.03;
+    updateCamera();
+  }
+
+  // Pulse rings
+  const t = clock.getElapsedTime();
+  pulseObjs.forEach(p => {
+    const scale = 1 + Math.sin(t * 2.5) * 0.15;
+    p.mesh.scale.set(scale, scale, scale);
+    p.mesh.material.opacity = 0.3 + Math.sin(t * 2.2) * 0.15;
+  });
+
+  // Cursor dot — hover on markers
+  const ndc = new THREE.Vector2((mouseX / innerWidth) * 2 - 1, -(mouseY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(hotspotMeshes);
+  const hovering = hits.length > 0;
+  const cd = document.getElementById('cursor-dot');
+  cd.classList.toggle('hover', hovering);
+  cd.style.opacity = hovering ? '1' : '0';
+  cd.style.left = mouseX + 'px';
+  cd.style.top = mouseY + 'px';
+
+  renderer.render(scene, camera);
+}
+
+// ================================================================
+// Init
+// ================================================================
+buildScene();
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXmemory — EXpanded MEMORY v6.0</title>
+
+<!-- Tailwind CSS Play CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Google Fonts: Inter & IBM Plex Mono -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<script>
+  // Tailwind Configuration to match reference/tailwind.config.js
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          void: {
+            DEFAULT: '#050505',
+            deep: '#020202',
+            card: 'rgba(20, 20, 20, 0.6)',
+          },
+          reality: {
+            fisico: '#4ADE80',
+            percettivo: '#FBBF24',
+            interpretativo: '#60A5FA',
+          },
+          emotion: {
+            fear: '#E15B5B',
+            confusion: '#E29B43',
+            hope: '#59B185',
+            sadness: '#5487D3',
+            anger: '#9F75E3',
+          },
+        },
+        fontFamily: {
+          sans: ['Inter', 'sans-serif'],
+          mono: ['IBM Plex Mono', 'monospace'],
+        },
+        letterSpacing: {
+          cinematic: '0.25em',
+          tightest: '-0.05em',
+        },
+        borderWidth: {
+          'hairline': '0.5px',
+        },
+        boxShadow: {
+          'glow-green': '0 0 15px rgba(74, 222, 128, 0.4)',
+          'glow-amber': '0 0 15px rgba(251, 191, 36, 0.4)',
+          'glow-blue': '0 0 15px rgba(96, 165, 250, 0.4)',
+        }
+      },
+    }
+  }
+</script>
+
+<!-- Custom Styles based on reference/globals.css -->
+<style type="text/tailwindcss">
+  @layer base {
+    body {
+      background-color: #050505;
+      color: #e5e7eb;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      transition: background-color 0.5s, color 0.5s;
+    }
+    html.light body {
+      background-color: #f8f8f5;
+      color: #1a1a16;
+    }
+  }
+
+  @layer components {
+    /* 1. Translucenza e Sfocatura Pannelli (Glassmorphism) */
+    .hud-panel {
+      background: rgba(10, 10, 10, 0.75);
+      backdrop-filter: blur(24px) saturate(120%);
+      -webkit-backdrop-filter: blur(24px) saturate(120%);
+      border: 0.5px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.7);
+    }
+    html.light .hud-panel {
+      background: rgba(245, 245, 242, 0.8);
+      border: 0.5px solid rgba(26, 26, 22, 0.12);
+      box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 2. Il Gradiente Cinematico della Timeline */
+    .timeline-gradient-bar {
+      background: linear-gradient(
+        to right,
+        #4ade80 0%,    /* Physical green */
+        #fbbf24 50%,   /* Perceptive amber */
+        #ef4444 100%   /* Emotional red */
+      );
+      height: 2px;
+      position: relative;
+      border-radius: 9999px;
+    }
+
+    /* 3. Slider Personalizzato */
+    .custom-slider-thumb::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #e5e7eb;
+      border: 2px solid #050505;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+    html.light .custom-slider-thumb::-webkit-slider-thumb {
+      background: #1a1a16;
+      border: 2px solid #f8f8f5;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .custom-slider-thumb::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* 4. Effetto Pulsazione Nodi */
+    .node-pulse-ring {
+      animation: pulse 3s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+  }
+
+  @keyframes pulse {
+    0% {
+      transform: scale(0.5);
+      opacity: 0.8;
+    }
+    50% {
+      opacity: 0.4;
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+
+  /* Fade-in screen overlay */
+  #fade-in {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #050505;
+    animation: fadeOut .8s ease-out forwards;
+    pointer-events: none;
+  }
+  html.light #fade-in {
+    background: #f8f8f5;
+  }
+  @keyframes fadeOut {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+</style>
+
+<!-- Three.js Library -->
+<script src="https://unpkg.com/three@0.158.0/build/three.min.js"></script>
+
+</head>
+<body class="min-h-screen w-full flex items-center justify-center relative select-none overflow-hidden font-sans">
+
+<div id="fade-in"></div>
+
+<!-- Background Canvas for Three.js Node Simulation -->
+<canvas id="bg-canvas" class="fixed inset-0 w-full h-full -z-10"></canvas>
+
+<!-- HUD Floating Panel (Glassmorphism) -->
+<div class="hud-panel w-[90%] max-w-[500px] p-7 rounded-xl flex flex-col gap-5 relative transition-all duration-500 scale-95 opacity-0 animate-[fadeIn_1.2s_ease_0.2s_forwards]">
+  
+  <!-- Telemetry Header -->
+  <div class="flex justify-between items-start border-b border-white/5 dark:border-black/5 pb-3">
+    <!-- Pulse Ring Status -->
+    <div class="flex items-center gap-2">
+      <div class="relative w-2 h-2 flex items-center justify-center">
+        <span class="absolute inline-flex h-full w-full rounded-full bg-reality-fisico opacity-75 node-pulse-ring"></span>
+        <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-reality-fisico"></span>
+      </div>
+      <span class="text-[10px] font-mono tracking-wider text-reality-fisico uppercase font-medium" id="sys-status">SYS_STATUS: ACTIVE</span>
+    </div>
+    
+    <!-- System Version & Time -->
+    <div class="text-[8px] font-mono text-gray-500 dark:text-gray-400 text-right leading-relaxed">
+      NODE: EXM_06_BETA<br>
+      LAT: 42.63° N · LON: 13.29° E
+    </div>
+  </div>
+
+  <!-- Logo and Tagline -->
+  <div class="flex flex-col items-center py-2 text-center">
+    <h1 class="text-3xl font-bold tracking-cinematic text-white dark:text-black uppercase drop-shadow-md select-none font-sans">
+      EXmemory
+    </h1>
+    <span class="text-[9px] font-mono tracking-[0.3em] text-reality-percettivo uppercase mt-1 select-none font-medium">
+      IMMERSIVE COLLECTIVE MEMORY
+    </span>
+    <span class="text-[10px] text-gray-400 dark:text-gray-500 font-light mt-3 max-w-[380px] leading-relaxed">
+      Un archivio immersivo stratificato per conservare e navigare la memoria del sisma del Centro Italia (2016).
+    </span>
+  </div>
+
+  <!-- Telemetry Data Grid -->
+  <div class="grid grid-cols-2 gap-3 border-t border-b border-white/5 dark:border-black/5 py-3 font-mono text-[9px] text-gray-400 dark:text-gray-500">
+    <div class="flex flex-col">
+      <span class="text-gray-500 dark:text-gray-400 text-[8px] uppercase tracking-wider">EVENT REGION</span>
+      <span class="text-white dark:text-black font-semibold mt-0.5">Centro Italia (Amatrice)</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-gray-500 dark:text-gray-400 text-[8px] uppercase tracking-wider">MAIN SHOCK</span>
+      <span class="text-white dark:text-black mt-0.5">Mw 6.5 · DEPTH: 9.2KM</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-gray-500 dark:text-gray-400 text-[8px] uppercase tracking-wider">SHADERS / BUMP MATRIX</span>
+      <span class="text-white dark:text-black mt-0.5">Bloom Precision Active</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="text-gray-500 dark:text-gray-400 text-[8px] uppercase tracking-wider">REALTIME ENTROPY</span>
+      <span class="text-reality-fisico font-semibold mt-0.5" id="entropy-display">0.00 ENTR</span>
+    </div>
+  </div>
+
+  <!-- Reality Layers Section -->
+  <div class="flex flex-col gap-2">
+    <span class="text-[9px] font-mono text-gray-500 dark:text-gray-400 uppercase tracking-widest font-semibold">Active Layers</span>
+    
+    <div class="space-y-1.5">
+      <!-- L1 Physical -->
+      <div class="flex items-center justify-between p-2 rounded bg-white/5 dark:bg-black/5 border border-white/5 dark:border-black/5 hover:border-reality-fisico/20 transition-all duration-300">
+        <div class="flex items-center gap-2.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-reality-fisico shadow-[0_0_6px_rgba(74,222,128,0.6)]"></span>
+          <span class="text-[10px] font-semibold text-white dark:text-black tracking-wider">L1 FISICO</span>
+        </div>
+        <span class="text-[8px] font-mono text-gray-400 dark:text-gray-500">Macerie, Rilievo 3D, Dati INGV</span>
+      </div>
+
+      <!-- L2 Perceptive -->
+      <div class="flex items-center justify-between p-2 rounded bg-white/5 dark:bg-black/5 border border-white/5 dark:border-black/5 hover:border-reality-percettivo/20 transition-all duration-300">
+        <div class="flex items-center gap-2.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-reality-percettivo shadow-[0_0_6px_rgba(251,191,36,0.6)]"></span>
+          <span class="text-[10px] font-semibold text-white dark:text-black tracking-wider">L2 PERCETTIVO</span>
+        </div>
+        <span class="text-[8px] font-mono text-gray-400 dark:text-gray-500">Audio, Immagini, Testimonianze</span>
+      </div>
+
+      <!-- L3 Interpretative -->
+      <div class="flex items-center justify-between p-2 rounded bg-white/5 dark:bg-black/5 border border-white/5 dark:border-black/5 hover:border-reality-interpretativo/20 transition-all duration-300">
+        <div class="flex items-center gap-2.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-reality-interpretativo shadow-[0_0_6px_rgba(96,165,250,0.6)]"></span>
+          <span class="text-[10px] font-semibold text-white dark:text-black tracking-wider">L3 INTERPRETATIVO</span>
+        </div>
+        <span class="text-[8px] font-mono text-gray-400 dark:text-gray-500">Mappe, Ricostruzioni, Archivio</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interactive Entropy Distortion Slider -->
+  <div class="flex flex-col gap-2 bg-white/5 dark:bg-black/5 p-3 rounded border border-white/5 dark:border-black/5">
+    <div class="flex justify-between items-center text-[9px] font-mono text-gray-400 dark:text-gray-500">
+      <span class="tracking-wider uppercase font-semibold">DISTORTION SIMULATOR (Bloom Precision)</span>
+      <span id="slider-val" class="font-bold text-reality-percettivo">0.00</span>
+    </div>
+    <input type="range" min="0" max="1" step="0.01" value="0.00" id="entropy-slider" class="w-full accent-reality-percettivo bg-white/10 dark:bg-black/10 h-[3px] rounded-lg outline-none cursor-pointer custom-slider-thumb">
+  </div>
+
+  <!-- Timeline Gradient Bar Divider -->
+  <div class="timeline-gradient-bar w-full mt-1"></div>
+
+  <!-- Action CTA -->
+  <div class="flex flex-col gap-3">
+    <a href="globe.html" class="group block w-full text-center border border-white/20 dark:border-black/20 hover:border-reality-fisico hover:shadow-[0_0_15px_rgba(74,222,128,0.25)] hover:bg-white dark:hover:bg-black hover:text-void-DEFAULT dark:hover:text-white transition-all duration-500 py-3 text-xs tracking-cinematic font-semibold text-white dark:text-black uppercase rounded">
+      Entra nello Spazio
+    </a>
+    
+    <!-- Footer settings -->
+    <div class="flex justify-between items-center text-[8px] font-mono text-gray-500 dark:text-gray-400 px-1 pt-1">
+      <span>TERREMOTO CENTRO ITALIA · 2016</span>
+      <button onclick="toggleTheme()" class="hover:text-white dark:hover:text-black transition-colors duration-200">
+        [ TEMA: VOID/LIGHT ]
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Custom animations style helper -->
+<style>
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+</style>
+
+<script>
+// ================================================================
+// Theme Toggle & Cache Management
+// ================================================================
+const dm = localStorage.getItem('exm_theme');
+if (dm === '0') {
+  document.documentElement.classList.add('light');
+}
+
+function toggleTheme() {
+  const isLight = document.documentElement.classList.toggle('light');
+  localStorage.setItem('exm_theme', isLight ? '0' : '1');
+  if (window.bgRenderer) {
+    window.bgRenderer.setClearColor(isLight ? 0xf8f8f5 : 0x050505);
+  }
+}
+
+// ================================================================
+// Three.js 3D Background - Constellation Network
+// ================================================================
+(function() {
+  const canvas = document.getElementById('bg-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+  window.bgRenderer = renderer;
+  
+  const isLight = document.documentElement.classList.contains('light');
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(isLight ? 0xf8f8f5 : 0x050505);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.z = 7;
+
+  // Configuration settings (referencing reference/themeSettings.ts)
+  const config = {
+    layers: {
+      fisico: new THREE.Color('#4ADE80'),
+      percettivo: new THREE.Color('#FBBF24'),
+      interpretativo: new THREE.Color('#60A5FA'),
+      fear: new THREE.Color('#E15B5B'),
+      anger: new THREE.Color('#9F75E3')
+    }
+  };
+
+  const particleCount = 450;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount * 3);
+  const colors = new Float32Array(particleCount * 3);
+  const initialPositions = [];
+
+  const colorKeys = Object.keys(config.layers);
+
+  // Distribute particles in a loose sphere
+  for (let i = 0; i < particleCount; i++) {
+    const u = Math.random();
+    const v = Math.random();
+    const theta = u * 2.0 * Math.PI;
+    const phi = Math.acos(2.0 * v - 1.0);
+    const r = 2.8 + (Math.random() - 0.5) * 1.8;
+
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
+
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    
+    initialPositions.push({
+      x: x, y: y, z: z,
+      theta: theta, phi: phi, r: r,
+      noiseOffset: Math.random() * 100
+    });
+
+    // Color grouping by layer theme
+    const colorType = colorKeys[i % colorKeys.length];
+    const col = config.layers[colorType];
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  // Circular glowing dot texture
+  const createDotTexture = () => {
+    const c = document.createElement('canvas');
+    c.width = 32;
+    c.height = 32;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+    grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.25)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  };
+
+  const pointsMaterial = new THREE.PointsMaterial({
+    size: 0.18,
+    map: createDotTexture(),
+    transparent: true,
+    opacity: 0.8,
+    vertexColors: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+
+  const particleSystem = new THREE.Points(geometry, pointsMaterial);
+  scene.add(particleSystem);
+
+  // Network connection lines
+  const linePositions = [];
+  // Build a simple layout connecting nearby nodes
+  for (let i = 0; i < particleCount; i += 6) {
+    for (let j = i + 1; j < i + 6; j++) {
+      if (j < particleCount) {
+        linePositions.push(
+          positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2],
+          positions[j * 3], positions[j * 3 + 1], positions[j * 3 + 2]
+        );
+      }
+    }
+  }
+
+  const lineGeometry = new THREE.BufferGeometry();
+  lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+  const lineMaterial = new THREE.LineBasicMaterial({
+    color: 0x444444,
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending
+  });
+
+  const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
+  scene.add(lines);
+
+  // Interaction controls
+  const slider = document.getElementById('entropy-slider');
+  const sliderVal = document.getElementById('slider-val');
+  const entropyDisplay = document.getElementById('entropy-display');
+  const sysStatus = document.getElementById('sys-status');
+  
+  let distortion = 0.0;
+  let time = 0;
+  let mouse = { x: 0, y: 0 };
+  let targetMouse = { x: 0, y: 0 };
+
+  slider.addEventListener('input', (e) => {
+    distortion = parseFloat(e.target.value);
+    sliderVal.textContent = distortion.toFixed(2);
+    entropyDisplay.textContent = (distortion * 1.5).toFixed(2) + " ENTR";
+    
+    // Telemetry updates based on entropy level
+    if (distortion > 0.8) {
+      sysStatus.textContent = "SYS_STATUS: DISTORTED / OVERLOAD";
+      sysStatus.style.color = "#E15B5B";
+    } else if (distortion > 0.4) {
+      sysStatus.textContent = "SYS_STATUS: FUSION LAYER ACTIVE";
+      sysStatus.style.color = "#FBBF24";
+    } else {
+      sysStatus.textContent = "SYS_STATUS: ACTIVE";
+      sysStatus.style.color = "#4ADE80";
+    }
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    targetMouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+    targetMouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  });
+
+  // Animate loop
+  function animate() {
+    requestAnimationFrame(animate);
+
+    // Increase speed when distorted (reference: speedMultiplier: 0.5)
+    time += 0.0015 * (1.0 + distortion * 8.0);
+
+    // Mouse interactive parallax rotation
+    mouse.x += (targetMouse.x - mouse.x) * 0.04;
+    mouse.y += (targetMouse.y - mouse.y) * 0.04;
+
+    particleSystem.rotation.y = time * 0.4 + mouse.x * 0.18;
+    particleSystem.rotation.x = time * 0.15 + mouse.y * 0.15;
+    lines.rotation.copy(particleSystem.rotation);
+
+    // Update individual particle coordinates dynamically when distortion is active
+    const posAttr = geometry.attributes.position;
+    const positionsArray = posAttr.array;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const orig = initialPositions[i];
+      
+      // Floating sinusoidal motion
+      const floatX = Math.sin(time + orig.theta) * 0.03;
+      const floatY = Math.cos(time + orig.phi) * 0.03;
+      const floatZ = Math.sin(time * 0.5 + orig.r) * 0.03;
+
+      // Entropy distortion factor (reference: noiseAmplitude, noiseFrequency)
+      let noiseX = 0, noiseY = 0, noiseZ = 0;
+      if (distortion > 0) {
+        const freq = 1.8;
+        const amp = 0.4 * distortion;
+        noiseX = Math.sin(orig.x * freq + time * 5.0) * amp;
+        noiseY = Math.cos(orig.y * freq + time * 5.0) * amp;
+        noiseZ = Math.sin(orig.z * freq + time * 5.0) * amp;
+      }
+
+      positionsArray[i * 3] = orig.x + floatX + noiseX;
+      positionsArray[i * 3 + 1] = orig.y + floatY + noiseY;
+      positionsArray[i * 3 + 2] = orig.z + floatZ + noiseZ;
+    }
+    posAttr.needsUpdate = true;
+
+    // Update lines connection position relative to moving nodes
+    const linePosAttr = lines.geometry.attributes.position;
+    const lineArray = linePosAttr.array;
+    let idx = 0;
+
+    for (let i = 0; i < particleCount; i += 6) {
+      for (let j = i + 1; j < i + 6; j++) {
+        if (j < particleCount && idx < lineArray.length) {
+          lineArray[idx++] = positionsArray[i * 3];
+          lineArray[idx++] = positionsArray[i * 3 + 1];
+          lineArray[idx++] = positionsArray[i * 3 + 2];
+          lineArray[idx++] = positionsArray[j * 3];
+          lineArray[idx++] = positionsArray[j * 3 + 1];
+          lineArray[idx++] = positionsArray[j * 3 + 2];
+        }
+      }
+    }
+    linePosAttr.needsUpdate = true;
+
+    // Dynamic color shifting for lines based on distortion
+    const isLightMode = document.documentElement.classList.contains('light');
+    if (distortion > 0.7) {
+      // Shift to emotional fear color under distortion
+      lineMaterial.color.setHex(0xE15B5B);
+      lineMaterial.opacity = 0.35;
+    } else {
+      lineMaterial.color.setHex(isLightMode ? 0xbbbbbb : 0x444444);
+      lineMaterial.opacity = 0.15 + distortion * 0.2;
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  // Handle Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  animate();
+})();
+</script>
+</body>
+</html>
